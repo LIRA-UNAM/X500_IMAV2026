@@ -1,6 +1,6 @@
-[submodule "ardupilot"]
-	path = ardupilot
-	url = https://github.com/ArduPilot/ardupilot.git
 [submodule "src/px4_msgs"]
 	path = src/px4_msgs
 	url = https://github.com/PX4/px4_msgs.git
+[submodule "PX4-Autopilot"]
+	path = PX4-Autopilot
+	url = https://github.com/PX4/PX4-Autopilot.git
