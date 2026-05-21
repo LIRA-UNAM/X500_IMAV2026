@@ -68,13 +68,18 @@ class PX4FlowPrecision(Node):
         self.locked_yaw = None
 
         # Parámetros de vuelo
-        self.target_altitude = 1.2   # Altura objetivo en metros
-        self.target_z        = -1.2  # Mismo valor en NED para el setpoint de posición
+        self.target_altitude = 1.5   # Altura objetivo en metros
+        self.target_z        = -1.5  # Mismo valor en NED para el setpoint de posición
         self.hold_duration   = 3.0   # hover seg
+        #Forward
+        self.forward_dis    = 2.0   #Distancia a la que se va a desplazar
+        self.forward_tol    = 0.15  #Error que puede tener
+        self. forward_hold  = 3.0   #Hold en nueva posición
 
         # Control de estados
         self.state            = "INIT"
-        self.hold_start_time  = None
+        self.hold_start_time  = None    #Hold inicial
+        self.hold_fwd_start   = None    #Hold forward
         self.stable_ticks     = 0
         self.stable_ticks_needed = 10  # 1 segundo a 10 Hz
 
@@ -190,9 +195,40 @@ class PX4FlowPrecision(Node):
                 )
 
             if elapsed >= self.hold_duration:
-                self.state = "LAND"
-                self.get_logger().info("LANDING - Aterrizando suavemente")
+                self.forward_x = safe_x + self.forward_dis * math.cos(self.locked_yaw)
+                self.forward_y = safe_y + self.forward_dis * math.sin(self.locked_yaw)
+                self-self.state = "FORWARD"
+                self.get_logger().info("Desplazandose 2.0 metros")
+        
+        elif self.state == "FORWARD":
+            setpoint.position = [self.forward_x, self.forward_y, self-self.target_z]
+            dist_target = math.sqrt(
+                (self.current_x - self.forward_x) ** 2 + (self.current_y - self.forward_y) ** 2
+            )
+            
+            if self.counter % 10 == 0:
+                self.get_logger().info("MOVE FORWARD")
 
+            if dist_target < self.forward_tol:
+                self.state = "HOLD_FORWARD"
+                self.get_logger().info("Llegó al destino")
+
+        elif self.state == "HOLD_FORWARD":
+            setpoint.position = [self.forward_x, self.forward_y, self-self.target_z]
+            if self.hold_fwd_start is None:
+                self.hold_fwd_start = self.get_clock().now()
+
+            elapsed = (
+                self.get_clock().now() - self.hold_fwd_start).nanoseconds / 1e9
+            
+            if self.counter % 10 == 0:
+                self.get_logger().info("HOLD FORWARD comenando")
+
+            if elapsed >= self.forward_hold:
+                self.state = "LAND"
+                self.get_logger().info("LAND, aterizando en el nuevo punto")
+
+        
         elif self.state == "LAND":
             setpoint.position = [safe_x, safe_y, 0.0]
             setpoint.velocity = [float('nan'), float('nan'), 0.4]  # Descenso suave
