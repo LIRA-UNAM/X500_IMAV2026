@@ -197,7 +197,7 @@ class PX4FlowPrecision(Node):
             if elapsed >= self.hold_duration:
                 self.forward_x = safe_x + self.forward_dis * math.cos(self.locked_yaw)
                 self.forward_y = safe_y + self.forward_dis * math.sin(self.locked_yaw)
-                self-self.state = "FORWARD"
+                self.state = "FORWARD"
                 self.get_logger().info("Desplazandose 2.0 metros")
         
         elif self.state == "FORWARD":
