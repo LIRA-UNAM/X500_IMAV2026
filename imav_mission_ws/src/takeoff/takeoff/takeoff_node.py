@@ -74,7 +74,7 @@ class PX4FlowPrecision(Node):
         #Forward
         self.forward_dis    = 2.0   #Distancia a la que se va a desplazar
         self.forward_tol    = 0.15  #Error que puede tener
-        self. forward_hold  = 3.0   #Hold en nueva posición
+        self.forward_hold  = 3.0   #Hold en nueva posición
 
         # Control de estados
         self.state            = "INIT"
@@ -201,7 +201,7 @@ class PX4FlowPrecision(Node):
                 self.get_logger().info("Desplazandose 2.0 metros")
         
         elif self.state == "FORWARD":
-            setpoint.position = [self.forward_x, self.forward_y, self-self.target_z]
+            setpoint.position = [self.forward_x, self.forward_y, self.target_z]
             dist_target = math.sqrt(
                 (self.current_x - self.forward_x) ** 2 + (self.current_y - self.forward_y) ** 2
             )
@@ -214,7 +214,7 @@ class PX4FlowPrecision(Node):
                 self.get_logger().info("Llegó al destino")
 
         elif self.state == "HOLD_FORWARD":
-            setpoint.position = [self.forward_x, self.forward_y, self-self.target_z]
+            setpoint.position = [self.forward_x, self.forward_y, self.target_z]
             if self.hold_fwd_start is None:
                 self.hold_fwd_start = self.get_clock().now()
 
