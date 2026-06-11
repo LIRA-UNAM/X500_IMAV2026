@@ -194,12 +194,12 @@ class PX4FlowPrecision(Node):
             if elapsed >= self.hold_duration:
                 self.state = "FORWARD"
                 self.hold_start_time = self.get_clock().now()
-                offboard.velocity = True
 
         elif self.state == "FORWARD":
+            offboard.velocity = True
             self.velocities(1.0, 0.0)
-            setpoint.position = [float('nan'), safe_y, self.target_z]
-            setpoint.velocity = [self.vx_world, float('nan'), float('nan')]
+            setpoint.position = [float('nan'), float('nan'), self.target_z]
+            setpoint.velocity = [self.vx_world, self.vy_world, float('nan')]
 
             elapsed = (self.get_clock().now() - self.hold_start_time).nanoseconds / 1e9
             
@@ -248,8 +248,8 @@ class PX4FlowPrecision(Node):
     
     #Función para velocidad respecto al drone
     def velocities(self, VX, VY):
-        self.vx_world = VX * math.cos(self.current_yaw)
-        self.vy_world = VY * math.sen(self.current_yaw)
+        self.vx_world = VX * math.cos(self.current_yaw) - VY * math.sin(self.current_yaw)
+        self.vy_world = VX * math.sin(self.current_yaw) + VY * math.cos(self.current_yaw)
 
 
 def main():
