@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'takeoff_node = takeoff.takeoff_node:main',
-            'simple_move = takeoff.simple_move:main'
+            'simple_move = takeoff.simple_move:main',
+            'test_node = takeoff.test_node:main'
         ],
     },
 )

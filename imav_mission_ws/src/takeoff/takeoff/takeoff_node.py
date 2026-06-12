@@ -121,6 +121,7 @@ class PX4FlowPrecision(Node):
         setpoint.acceleration = [float('nan'), float('nan'), float('nan')]
         setpoint.jerk         = [float('nan'), float('nan'), float('nan')]
         setpoint.yawspeed     = float('nan')
+        # setpoint.yaw = float('nan')
 
         # Bloquear posición XY y yaw mientras está en tierra
         if self.state in ("INIT", "ARMING"):
