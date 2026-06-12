@@ -38,11 +38,11 @@ class PX4FlowPrecision(Node):
             self.local_pos_cb,
             sub_qos)
         
-        self.attitude_sub = self.create_subscription(
-            VehicleAttitude,
-            '/fmu/out/vehicle_attitude',
-            self.attitude_cb,
-            sub_qos)
+        # self.attitude_sub = self.create_subscription(
+        #     VehicleAttitude,
+        #     '/fmu/out/vehicle_attitude',
+        #     self.attitude_cb,
+        #     sub_qos)
 
         self.status_sub = self.create_subscription(
             VehicleStatus,
