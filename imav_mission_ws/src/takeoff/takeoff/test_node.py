@@ -34,7 +34,7 @@ class PX4FlowPrecision(Node):
         # Subscribers
         self.local_pos_sub = self.create_subscription(
             VehicleLocalPosition,
-            '/fmu/out/vehicle_local_position',
+            '/fmu/out/vehicle_local_position_v1',
             self.local_pos_cb,
             sub_qos)
         
@@ -46,7 +46,7 @@ class PX4FlowPrecision(Node):
 
         self.status_sub = self.create_subscription(
             VehicleStatus,
-            '/fmu/out/vehicle_status',
+            '/fmu/out/vehicle_status_v3',
             self.status_cb,
             sub_qos)
 
