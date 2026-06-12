@@ -1,7 +1,7 @@
 import rclpy
 import math
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 
 from px4_msgs.msg import (
     OffboardControlMode,
@@ -18,16 +18,16 @@ class PX4FlowPrecision(Node):
 
         # QoS configuration for PX4 uXRCE-DDS
         pub_qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            history=HistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )
 
         sub_qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-            history=HistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )
 
