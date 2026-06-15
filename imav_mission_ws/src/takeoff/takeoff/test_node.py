@@ -8,8 +8,7 @@ from px4_msgs.msg import (
     TrajectorySetpoint,
     VehicleCommand,
     VehicleLocalPosition,
-    VehicleStatus,
-    VehicleAttitude
+    VehicleControlMode
 )
 
 class PX4FlowPrecision(Node):
@@ -44,10 +43,10 @@ class PX4FlowPrecision(Node):
         #     self.attitude_cb,
         #     sub_qos)
 
-        self.status_sub = self.create_subscription(
-            VehicleStatus,
-            '/fmu/out/vehicle_status_v3',
-            self.status_cb,
+        self.control_mode_sub = self.create_subscription(
+            VehicleControlMode,
+            '/fmu/out/vehicle_control_mode',
+            self.control_mode_cb,
             sub_qos)
 
         # Publishers
@@ -73,8 +72,8 @@ class PX4FlowPrecision(Node):
         self.counter = 0
 
         # State Variables
-        self.nav_state = VehicleStatus.NAVIGATION_STATE_MAX
-        self.arming_state = VehicleStatus.ARMING_STATE_DISARMED
+        self.is_offboard = False
+        self.is_armed = False
         
         # Position Data (EKF2 Filtered)
         self.current_x = 0.0
@@ -107,10 +106,10 @@ class PX4FlowPrecision(Node):
         self.current_z = msg.z
         self.current_yaw = msg.heading
 
-    def status_cb(self, msg):
+    def control_mode_cb(self, msg):
         # Monitor the actual state of the Pixhawk 6x
-        self.nav_state = msg.nav_state
-        self.arming_state = msg.arming_state
+        self.is_offboard = msg.flag_control_offboard_enabled
+        self.is_armed = msg.flag_armed
 
     # ===================== MAIN CONTROL LOOP =====================
 
@@ -156,12 +155,11 @@ class PX4FlowPrecision(Node):
 
         elif self.state == "WAITING_CONFIRMATION":
             # Only proceed if Pixhawk confirms
-            if (self.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and 
-                self.arming_state == VehicleStatus.ARMING_STATE_ARMED):
+            if self.is_offboard and self.is_armed:
                 self.get_logger().info(f"CONFIRMADO. Despegando a {self.target_altitude}m")
                 self.state = "TAKEOFF"
             elif self.counter % 20 == 0:
-                self.get_logger().info("Esperando confirmación de Armado y Offboard")
+                self.get_logger().info("Esperando confirmación de Armado y Offboard de la Pixhawk...")
                 self.send_cmd(176, param1=1.0, param2=6.0) 
                 self.send_cmd(400, param1=1.0)
 
@@ -203,7 +201,7 @@ class PX4FlowPrecision(Node):
             if self.counter % 20 == 0:
                 self.get_logger().info(f"ATERRIZANDO... Altura actual: {abs(self.current_z):.2f}m")
 
-            if self.arming_state == VehicleStatus.ARMING_STATE_DISARMED:
+            if not self.is_armed:
                 self.get_logger().info("VEHÍCULO DESARMADO.")
                 self.state = "LANDED"
 
