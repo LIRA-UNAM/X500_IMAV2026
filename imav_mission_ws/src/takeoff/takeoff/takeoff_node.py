@@ -192,7 +192,7 @@ class PX4OffboardNode(Node):
                 if counter >= LOOP_RATE:
                     self.get_logger().info("Solicitando modo OFFBOARD y ARMING")
                     self.send_cmd(176, param1=1.0, param2=6.0)
-                    self.send_cmd(400., param1=1.0)
+                    self.send_cmd(400, param1=1.0)
                     self.confirmation_start = now
                     state = SM_WAIT_CONFIRMATION
                 
@@ -213,7 +213,7 @@ class PX4OffboardNode(Node):
                     if counter % LOOP_RATE == 0:
                         self.get_logger().info("Esperando confirmación de OFFBOARD y ARMING")
                         self.send_cmd(176, param1=1.0, param2=6.0)
-                        self.send_cmd(400., param1=1.0)
+                        self.send_cmd(400, param1=1.0)
                 
             elif state == SM_WAIT_LAUNCH:
                 if counter % (LOOP_RATE * 3) == 0:
