@@ -4,7 +4,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
-from px4_msgs.msg import VehicleLocalPosition 
+from px4_msgs.msg import VehicleLocalPosition, TrajectorySetpoint 
 
 class CmdVelTranslateNode(Node):
 
@@ -26,7 +26,8 @@ class CmdVelTranslateNode(Node):
             depth = 1
         )
         
-        self.px4_pub = self.create_publisher(Float32MultiArray, 'px4_cmd_vel', pub_qos)
+        #self.px4_pub = self.create_publisher(Float32MultiArray, 'px4_cmd_vel', pub_qos)
+        self.px4_pub = self.create_publisher(TrajectorySetpoint, '/fmu/in/trajectory_setpoint', pub_qos)
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, sub_qos)
         self.create_subscription(VehicleLocalPosition, '/fmu/out/vehicle_local_position_v1', self.local_pos_cb, sub_qos)
 
@@ -59,12 +60,20 @@ class CmdVelTranslateNode(Node):
         vx_ned = cos * self.vx - sen * self.vy
         vy_ned = sen * self.vx + cos * self.vy
         vz_ned = -self.vz
-        
-        msg1 = Float32MultiArray()
-        msg1.data = [vx_ned, vy_ned, vz_ned]
+        yawspeed = -self.ang_vz
 
-        self.px4_pub.publish(msg1)
+        # msg1 = Float32MultiArray()
+        # msg1.data = [vx_ned, vy_ned, vz_ned]
 
+        px4 = TrajectorySetpoint()
+        px4.timestamp = int(self.get_clock().now().nanoseconds / 1000)
+        px4.position = [float('nan'), float('nan'), float('nan')]
+        px4.acceleration = [float('nan'), float('nan'), float('nan')]
+        px4.yaw = float('nan')
+        px4.velocity = [vx_ned, vy_ned, vz_ned]
+        px4.yawspeed = yawspeed
+
+        self.px4_pub.publish(px4) 
 
 def main(args = None):
     rclpy.init(args=args)
