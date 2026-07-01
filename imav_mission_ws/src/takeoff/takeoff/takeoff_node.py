@@ -116,13 +116,13 @@ class PX4OffboardNode(Node):
         
         # Señal externa para disparar el despegue
         self.create_subscription(Bool,
-            '/navigation/do_takeoff',
+            '/hardware/do_takeoff',
             self.takeoff_cb,
             1)
         
         # Señal externa para salir del HOLD y ceder control al nodo de aterrizaje
         self.create_subscription(Bool,
-            '/navigation/release_hold',
+            '/hardware/release_hold',
             self.release_hold_cb,
             1)
         
@@ -145,7 +145,7 @@ class PX4OffboardNode(Node):
         # takeoff_ready: True cuando el dron está estable en hold (1 m)
         self.takeoff_rdy_pub = self.create_publisher(
             Bool, 
-            '/navigation/takeoff_ready',
+            '/hardware/takeoff_ready',
             1)
         
         # Position Data (EKF2 Filtered)
