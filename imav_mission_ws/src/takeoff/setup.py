@@ -32,7 +32,8 @@ setup(
             'takeoff_node = takeoff.takeoff_node:main',
             'simple_move = takeoff.simple_move:main',
             'test_node = takeoff.test_node:main',
-            'translate_node = takeoff.cmd_translate:main'
+            'translate_node = takeoff.cmd_translate:main',
+            'odom_to_tf = takeoff.odom_to_tf:main'
         ],
     },
 )
