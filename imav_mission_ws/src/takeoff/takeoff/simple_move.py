@@ -44,7 +44,7 @@ class MissionNode(Node):
         ocm.timestamp = self.get_clock().now().nanoseconds // 1000
         ocm.position = False
         ocm.velocity = True #Se le indica que se va a controlar la velocidad
-        ocm.offboard_pub.publish(ocm)
+        self.offboard_pub.publish(ocm)
 
     def publish_cmd_vel(self, vx: float = 0.0, vy: float = 0.0, vz: float = 0.0, yaw_rate: float = 0.0):
         """"
@@ -60,7 +60,7 @@ class MissionNode(Node):
 
     # Constructor
     def __init__(self):
-        super().init__('simple_move_node')
+        super().__init__('simple_move_node')
         self.get_logger().info("INITIALIZING SIMPLE MOVE NODE")
 
         # QoS configuration for PX4 uXRCE-DDS
@@ -82,6 +82,7 @@ class MissionNode(Node):
         self.create_subscription(
             Bool, 
             '/hardware/takeoff_ready',
+            self.takeoff_ready,
             1
         )
         
