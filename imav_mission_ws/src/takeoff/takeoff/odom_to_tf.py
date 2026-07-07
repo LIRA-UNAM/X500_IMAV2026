@@ -10,7 +10,6 @@ from tf_transformations import quaternion_multiply, quaternion_inverse
 # Fixed rotations between PX4 and ROS conventions (q: x, y, z, w)
 _Q_NED_TO_ENU = (0.70710678, 0.70710678, 0.0, 0.0)  # world: NED -> ENU
 _Q_FRD_TO_FLU = (1.0, 0.0, 0.0, 0.0)                # body:  FRD -> FLU
-_Q_IDENTITY = (0.0, 0.0, 0.0, 1.0)
 
 
 class OdomToTFNode(Node):
@@ -36,10 +35,10 @@ class OdomToTFNode(Node):
         # Publish the TF at 50 Hz
         self.tf_timer_ = self.create_timer(1.0 / 50.0, self.tf_timer_callback)
 
-        # Origin captured from the first valid odometry sample
+        # Origin captured: only position
         self.origin_set_ = False
         self.origin_pos_ = (0.0, 0.0, 0.0)     # NED
-        self.origin_rot_inv_ = _Q_IDENTITY     # inverse of the initial FRD/NED attitude
+
 
         # Last computed pose
         self.x_ = 0.0
@@ -51,6 +50,8 @@ class OdomToTFNode(Node):
         self.qw_ = 1.0
         self.have_pose_ = False
 
+        self.last_timestamp_us_ = 0
+        
         self.get_logger().info("Odom To TF Node for X500 started.")
 
     #frame helpers
@@ -68,12 +69,14 @@ class OdomToTFNode(Node):
         if any(math.isnan(v) for v in msg.position) or any(math.isnan(v) for v in msg.q):
             return  # EKF not initialized yet
 
+
+        self.last_timestamp_us_ = msg.timestamp #store sensor timestamp
+
         # Reorder PX4's (w, x, y, z) into the ROS/tf_transformations (x, y, z, w)
         q_cur = (msg.q[1], msg.q[2], msg.q[3], msg.q[0])
 
         if not self.origin_set_:
             self.origin_pos_ = (msg.position[0], msg.position[1], msg.position[2])
-            self.origin_rot_inv_ = quaternion_inverse(q_cur)
             self.origin_set_ = True
             self.get_logger().info(
                 "Origin captured at NED ({:.2f}, {:.2f}, {:.2f}). "
@@ -83,13 +86,12 @@ class OdomToTFNode(Node):
         rel_x = msg.position[0] - self.origin_pos_[0]
         rel_y = msg.position[1] - self.origin_pos_[1]
         rel_z = msg.position[2] - self.origin_pos_[2]
-        q_rel = quaternion_multiply(self.origin_rot_inv_, q_cur)
-
-        # Convert to ROS convention (map = ENU, base_link = FLU)
         self.x_, self.y_, self.z_ = self.ned_to_enu_position(rel_x, rel_y, rel_z)
-        q_enu = quaternion_multiply(quaternion_multiply(_Q_NED_TO_ENU, q_rel), _Q_FRD_TO_FLU)
-        self.qx_, self.qy_, self.qz_, self.qw_ = q_enu
 
+        q_enu = quaternion_multiply(
+            quaternion_multiply(_Q_NED_TO_ENU, q_cur), _Q_FRD_TO_FLU)
+        self.qx_, self.qy_, self.qz_, self.qw_ = q_enu
+ 
         self.have_pose_ = True
 
     def tf_timer_callback(self):
@@ -97,18 +99,22 @@ class OdomToTFNode(Node):
             return
 
         t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
+
+        stamp_ns = self.last_timestamp_us_ * 1000
+        t.header.stamp.sec     = int(stamp_ns // 1_000_000_000)
+        t.header.stamp.nanosec = int(stamp_ns  % 1_000_000_000)
+
         t.header.frame_id = 'map'
         t.child_frame_id = 'base_link'
 
-        t.transform.translation.x = self.x_
-        t.transform.translation.y = self.y_
-        t.transform.translation.z = self.z_
-
-        t.transform.rotation.x = self.qx_
-        t.transform.rotation.y = self.qy_
-        t.transform.rotation.z = self.qz_
-        t.transform.rotation.w = self.qw_
+        t.transform.translation.x = float(self.x_)
+        t.transform.translation.y = float(self.y_)
+        t.transform.translation.z = float(self.z_)
+ 
+        t.transform.rotation.x = float(self.qx_)
+        t.transform.rotation.y = float(self.qy_)
+        t.transform.rotation.z = float(self.qz_)
+        t.transform.rotation.w = float(self.qw_)
 
         self.broadcaster_.sendTransform(t)
 
