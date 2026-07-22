@@ -24,14 +24,14 @@ def generate_launch_description():
         package='takeoff',
         executable='simple_move',
         name='simple_move',
-        outpu='screen',
+        output='screen',
         emulate_tty=True
     )
 
     translate = Node(
         package='takeoff',
-        executable='cmd_translate',
-        name='cmd_translate',
+        executable='translate_node',
+        name='translate_node',
         output='screen',
         emulate_tty=True,
     )
