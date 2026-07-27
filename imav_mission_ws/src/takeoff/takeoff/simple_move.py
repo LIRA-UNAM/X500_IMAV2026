@@ -112,6 +112,8 @@ class MissionNode(Node):
             1
         )
 
+        self.land_flag_pub = self.create_publisher(Bool, '/land_ready', 1)
+
         # Position Data (EKF2 Filtered)
         self.current_x = 0.0
         self.current_y = 0.0
@@ -120,6 +122,7 @@ class MissionNode(Node):
 
         self.takeoff_ready_flag = False
         self.mission_start = None
+        self.land_flag = False
 
     def spin(self):
         self.get_logger().info("SIMPLE MOVE NODE IS RUNNING")
@@ -155,7 +158,13 @@ class MissionNode(Node):
             elif state == SM_HOVER:
                 self.publish_offboard_hearbeat()
                 self.publish_cmd_vel()
-                
+
+                if not self.land_flag:
+                    self.land_flag = True
+                    self.land_flag_pub.publish(Bool(data=True))
+                    self.get_logger().info("Land flag enviado, cediendo control")
+                    break
+                    
                 if counter % LOOP_RATE == 0:
                     self.get_logger().info("HOVERING AT POSITION: x=%.2f, y=%.2f, z=%.2f" 
                                            % (self.current_x, self.current_y, self.current_z))
