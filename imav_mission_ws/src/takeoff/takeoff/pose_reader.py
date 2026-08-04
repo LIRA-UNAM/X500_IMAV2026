@@ -38,23 +38,23 @@ class PoseReaderNode(Node):
             self.get_logger().warn("TF not available yet: {}".format(e), throttle_duration_sec=2.0)
             return
     
-    #Position in meters
-    x = tf.transform.translation.x
-    y = tf.transform.translation.y
-    z = tf.transform.translation.z
-    
-    #Orientation in degrees
-    q = tf.transform.rotation
-    (roll, pitch, yaw) = euler_from_quaternion([q.x, q.y, q.z, q.w])
-    roll_deg = roll * 180.0 / 3.141592653589793
-    pitch_deg = pitch * 180.0 / 3.141592653589793
-    yaw_deg = yaw * 180.0 / 3.141592653589793
-    
-    self.get_logger().info(
-        "Pose: Position (x={:.2f}, y={:.2f}, z={:.2f}) meters \n"
-        "Orientation (roll={:.2f}, pitch={:.2f}, yaw={:.2f}) degrees".format(
-            x, y, z, roll_deg, pitch_deg, yaw_deg
-        )
+        #Position in meters
+        x = tf.transform.translation.x
+        y = tf.transform.translation.y
+        z = tf.transform.translation.z
+        
+        #Orientation in degrees
+        q = tf.transform.rotation
+        (roll, pitch, yaw) = euler_from_quaternion([q.x, q.y, q.z, q.w])
+        roll_deg = roll * 180.0 / 3.141592653589793
+        pitch_deg = pitch * 180.0 / 3.141592653589793
+        yaw_deg = yaw * 180.0 / 3.141592653589793
+        
+        self.get_logger().info(
+            "Pose: Position (x={:.2f}, y={:.2f}, z={:.2f}) meters \n"
+            "Orientation (roll={:.2f}, pitch={:.2f}, yaw={:.2f}) degrees".format(
+                x, y, z, roll_deg, pitch_deg, yaw_deg
+            )
     )
 
 def main(args=None):
