@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.node import time
+from rclpy.time import Time
 
 from tf2_ros import Buffer, TransformListenerm, LookupException, ExtrapolationException
 from tf_transformations import euler_from_quaternion
@@ -33,7 +33,7 @@ class PoseReaderNode(Node):
         
     def timer_callback(self):
         try:
-            tf = self.tf_buffer_.lookup_transform(self.map_frame_, self.drone_frame_, time())
+            tf = self.tf_buffer_.lookup_transform(self.map_frame_, self.drone_frame_, Time())
         except (LookupException, ExtrapolationException) as e:
             self.get_logger().warn("TF not available yet: {}".format(e), throttle_duration_sec=2.0)
             return
