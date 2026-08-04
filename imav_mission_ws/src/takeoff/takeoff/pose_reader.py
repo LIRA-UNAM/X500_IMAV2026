@@ -33,7 +33,7 @@ class PoseReaderNode(Node):
         
     def timer_callback(self):
         try:
-            tf = self.tf_buffer_.lookup_transform(self.map_frame_, self.drone_frame_, Time())
+            tf = self.tf_buffer_.lookup_transform(self.map_frame_, self.drone_frame_, time())
         except (LookupException, ExtrapolationException) as e:
             self.get_logger().warn("TF not available yet: {}".format(e), throttle_duration_sec=2.0)
             return
