@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.node import Time
+from rclpy.node import time
 
 from tf2_ros import Buffer, TransformListenerm, LookupException, ExtrapolationException
 from tf_transformations import euler_from_quaternion
