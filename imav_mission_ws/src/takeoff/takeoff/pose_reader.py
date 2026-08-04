@@ -12,7 +12,7 @@ class PoseReaderNode(Node):
     Prints the pose (meters and degrees) of the robot in the world frame.
     """
 
-    READ_RATE = 10
+    READ_RATE = 5
 
     def __init__(self):
         super().__init__('pose_reader_node')
