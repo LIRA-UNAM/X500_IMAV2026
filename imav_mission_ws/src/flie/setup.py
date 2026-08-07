@@ -40,6 +40,7 @@ setup(
             'cf_brain_node = flie.cf_brain_node:main',
             'tf_broadcaster_node = flie.tf_broadcaster_node:main',
             'waypoint_navigator = flie.waypoint_navigator:main',
+            'stateMachine = flie.stateMachine:main'
         ],
     },
 )

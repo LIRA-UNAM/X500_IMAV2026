@@ -94,16 +94,16 @@ class CFBrainNode(Node):
         self.publish_coordinates(2.0, -1.0, 1.0)
         self.publish_coordinates(1.0, -0.5, 0.5)
         
-        # 5. Turn left (Girar a 1.5 rad/s durante 1.0 segundo)
-        self.get_logger().info("Turning left 90°...")
-        vel = Twist()
-        vel.angular.z = 1.5
-        self.publish_velocity_for_duration(vel, 1.0) 
+        # # 5. Turn left (Girar a 1.5 rad/s durante 1.0 segundo)
+        # self.get_logger().info("Turning left 90°...")
+        # vel = Twist()
+        # vel.angular.z = 1.5
+        # self.publish_velocity_for_duration(vel, 1.0) 
         
-        # 6. Stop (Frenar y mantener 0.0 durante 1.0 segundo)
-        self.get_logger().info("Stopping...")
-        vel = Twist()
-        self.publish_velocity_for_duration(vel, 1.0)
+        # # 6. Stop (Frenar y mantener 0.0 durante 1.0 segundo)
+        # self.get_logger().info("Stopping...")
+        # vel = Twist()
+        # self.publish_velocity_for_duration(vel, 1.0)
 
         # 7. Land
         self.get_logger().info("Sending land")
