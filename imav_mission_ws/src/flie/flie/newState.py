@@ -19,7 +19,7 @@ class StateMachine(Node):
             self.is_ready = True
             self.get_logger().info('Drone listooo')
 
-    def arrive_cb(self, msg: Bool):
+    def arrived_cb(self, msg: Bool):
         if msg.data:
             self.has_arrived = True
 
@@ -55,7 +55,7 @@ class StateMachine(Node):
         state = SM_INIT
 
         while rclpy.ok():
-            rclpy.spin_once(self)
+            rclpy.spin_once(self, timeout_sec=0.0)
 
             if state == SM_INIT:
                 if counter >= (LOOP_RATE * 2):
