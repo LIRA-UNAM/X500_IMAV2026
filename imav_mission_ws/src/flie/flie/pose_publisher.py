@@ -29,7 +29,7 @@ class CrazyfliePosePublisher:
         self.node = node
         self.world_frame_id = world_frame_id
 
-        self.pose_pub = node.create_publisher(PoseStamped, topic, 10)
+        self.pose_pub = node.create_publisher(PoseStamped, topic, 10) # 10Hz = 1s
 
         # Último valor conocido de cada bloque de log (se combinan al publicar)
         self._last_pos = (0.0, 0.0, 0.0)
@@ -40,6 +40,11 @@ class CrazyfliePosePublisher:
         # Referencias a los LogConfig para que no las recolecte el GC
         self._log_pos = None
         self._log_quat = None
+
+        self._last_valid_z = 0.0
+        self._last_time_pos = None
+        self._max_z_rate = 1.0 #m/s que tiene de cambio abrupto.
+        self._rejection_count = 0 #Contador de rechazos en la estimazión de z.
 
     def reset_estimator(self, scf):
         """
@@ -96,12 +101,38 @@ class CrazyfliePosePublisher:
     def _position_callback(self, timestamp, data, logconf):
         if not self._got_first_pos:
             self._got_first_pos = True
+            self._last_valid_z = data['kalman.stateZ']
+            self._last_time_pos = self.node.get_clock().now()
+            self._rejection_count = 0
             self.node.get_logger().info(f"Primer dato de posición recibido: {data}")
-        self._last_pos = (
-            data['kalman.stateX'],
-            data['kalman.stateY'],
-            data['kalman.stateZ'],
-        )
+        
+        current_time = self.node.get_clock().now()
+        delta_t = (current_time - self._last_time_pos).nanoseconds / 1e9
+        #Datos del sensor crudos
+        raw_x = data['kalman.stateX']
+        raw_y = data['kalman.stateY']
+        raw_z = data['kalman.stateZ']
+
+        if delta_t > 0:
+            vz = abs(raw_z - self._last_valid_z) / delta_t
+            if vz > self._max_z_rate:
+                self._rejection_count += 1
+                if self._rejection_count < 10: #Si dura menos de 10Hz, se rechaza el dato
+                    filtered_z = self._last_valid_z
+                else: #Se acepta el nuevo dato, ya que duro más de 1s en la misma altura
+                    filtred_z = raw_z
+                    self._last_valid_z = filtered_z
+                    self._rejection_count = 0
+            else:
+                filtred_z = raw_z
+                self._last_valid_z = filtred_z
+                self._rejection_count = 0
+        else:
+            filtred_z = raw_z
+            self._last_valid_z = filtred_z
+
+        self._last_time_pos = current_time
+        self._last_pos = (raw_x, raw_y, filtred_z)
         self._publish_pose()
 
     def _orientation_callback(self, timestamp, data, logconf):
