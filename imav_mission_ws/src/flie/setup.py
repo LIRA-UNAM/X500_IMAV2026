@@ -42,6 +42,7 @@ setup(
             'waypoint_navigator = flie.waypoint_navigator:main',
             'stateMachine = flie.stateMachine:main',
             'newState = flie.newState:main',
+            'cf_takeoff_2 = flie.cf_takeoff_2:main',
         ],
     },
 )

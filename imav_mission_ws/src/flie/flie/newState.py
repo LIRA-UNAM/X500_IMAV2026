@@ -9,6 +9,7 @@ SM_TAKEOFF = 10
 SM_NAVIGATION = 20
 SM_LANDING = 30
 SM_DONE = 40
+SM_STOP = 50
 
 LOOP_RATE = 20
 
@@ -23,12 +24,18 @@ class StateMachine(Node):
         if msg.data:
             self.has_arrived = True
 
+    def stop_cb(self, msg:Bool):
+        if msg.data and not self.stop_triggered:
+            self.stop_triggered = True
+
+            
     def __init__(self):
         super().__init__('state_machin_node')
         self.get_logger().info("State Machine Node started")
 
         self.ready_sub = self.create_subscription(Bool, 'hardware/takeoff_ready', self.ready_cb, 10)
         self.arrived_sub = self.create_subscription(Bool, 'navigator/arrived', self.arrived_cb, 10)
+        self.stop_sub = self.create_subscription(Bool, 'emergency/stop', self.stop_cb, 10)
 
         self.takeoff_pub = self.create_publisher(Bool, 'hardware/start_takeoff', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
@@ -38,6 +45,7 @@ class StateMachine(Node):
 
         self.is_ready = False
         self.has_arrived = False
+        self.stop_triggered = False
 
         self.command_sent = False
 
@@ -56,6 +64,9 @@ class StateMachine(Node):
 
         while rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0.0)
+
+            if self.stop_triggered and state not in (SM_STOP, SM_DONE):
+                state = SM_STOP
 
             if state == SM_INIT:
                 if counter >= (LOOP_RATE * 2):
@@ -98,6 +109,12 @@ class StateMachine(Node):
                     state = SM_DONE
 
             elif state == SM_DONE:
+                break
+
+            elif state == SM_STOP: 
+                if not self.command_sent:
+                    self.nav_enable_pub.publish(Bool(data=False))
+                    self.command_sent = True
                 break
 
             counter += 1
