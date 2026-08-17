@@ -43,8 +43,9 @@ class CrazyfliePosePublisher:
 
         self._last_valid_z = 0.0
         self._last_time_pos = None
-        self._max_z_rate = 1.0 #m/s que tiene de cambio abrupto.
+        self._max_z_rate = 1.5 #m/s que tiene de cambio abrupto.
         self._rejection_count = 0 #Contador de rechazos en la estimazión de z.
+        self._rejection_persistence = 100
 
     def reset_estimator(self, scf):
         """
@@ -53,6 +54,13 @@ class CrazyfliePosePublisher:
         posición física donde estaba el dron al arrancar el nodo.
         """
         self.node.get_logger().info("Reseteando estimador Kalman...")
+
+        try:
+            scf.cf.param.set_value('kalman.mRangeStd', '1.0')
+
+        except Exception as e:
+            self.node.get_logger().error(f"Error setting kalman.mRangeStd: {e}")
+
         scf.cf.param.set_value('kalman.resetEstimation', '1')
         time.sleep(0.1)
         scf.cf.param.set_value('kalman.resetEstimation', '0')
@@ -117,22 +125,22 @@ class CrazyfliePosePublisher:
             vz = abs(raw_z - self._last_valid_z) / delta_t
             if vz > self._max_z_rate:
                 self._rejection_count += 1
-                if self._rejection_count < 10: #Si dura menos de 10Hz, se rechaza el dato
+                if self._rejection_count < self._rejection_persistence: #Si dura menos de 20Hz, se rechaza el dato
                     filtered_z = self._last_valid_z
                 else: #Se acepta el nuevo dato, ya que duro más de 1s en la misma altura
-                    filtred_z = raw_z
+                    filtered_z = raw_z
                     self._last_valid_z = filtered_z
                     self._rejection_count = 0
             else:
-                filtred_z = raw_z
-                self._last_valid_z = filtred_z
+                filtered_z = raw_z
+                self._last_valid_z = filtered_z
                 self._rejection_count = 0
         else:
-            filtred_z = raw_z
-            self._last_valid_z = filtred_z
+            filtered_z = raw_z
+            self._last_valid_z = filtered_z
 
         self._last_time_pos = current_time
-        self._last_pos = (raw_x, raw_y, filtred_z)
+        self._last_pos = (raw_x, raw_y, filtered_z)
         self._publish_pose()
 
     def _orientation_callback(self, timestamp, data, logconf):

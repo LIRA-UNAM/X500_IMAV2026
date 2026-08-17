@@ -50,10 +50,10 @@ class StateMachine(Node):
         self.command_sent = False
 
         self.waypoints = [
-                    (0.0, -1.0, 1.2),
-                    (2.0, -1.0, 1.2),
-                    (1.0, -0.5, 1.0),
-                    (2.0, -0.5, 1.0)
+                    (0.0, 0.0, 0.6),
+                    # (0.0, -0.55, 0.5),
+                    # (2.0, 0.0, 0.5),
+                    (2.0, 0.0, 0.6),
                 ]
         self.current_waypoint_index = 0
 
