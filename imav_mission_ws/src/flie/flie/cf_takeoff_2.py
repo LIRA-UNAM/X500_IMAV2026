@@ -31,11 +31,14 @@ class CFHardwareNode(Node):
         self.create_subscription(Bool, 'hardware/start_takeoff', self.takeoff_cb, 10)
         self.create_subscription(Twist, 'hardware/cmd_vel_cf', self.vel_cb, 10)
         self.create_subscription(Bool, 'hardware/start_landing', self.land_cb, 10)
-
         self.create_subscription(Bool, 'emergency/stop', self.stop_cb, 10)
 
         self.takeoff_pub = self.create_publisher(Bool, 'hardware/takeoff_ready', 10)
-        self.pose_publisher = CrazyfliePosePublisher(self, world_frame_id=self.get_parameter('world_frame_id').value, topic=self.get_parameter('pose_topic').value )
+        self.pose_publisher = CrazyfliePosePublisher(
+            self,
+            world_frame_id=self.get_parameter('world_frame_id').value,
+            topic=self.get_parameter('pose_topic').value
+        )
 
         self.state = SM_DISCONNECTED
         self.takeoff_requested = False
@@ -119,7 +122,7 @@ class CFHardwareNode(Node):
 
 def main(args=None):
     logging.basicConfig(level=logging.ERROR)
-    cflib.crtp.init_drivers(enable_debug_drive=False)
+    cflib.crtp.init_drivers(enable_debug_driver=False)
     rclpy.init(args=args)
     node = CFHardwareNode()
     rclpy.spin(node)

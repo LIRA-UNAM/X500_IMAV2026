@@ -43,9 +43,9 @@ class CrazyfliePosePublisher:
 
         self._last_valid_z = 0.0
         self._last_time_pos = None
-        self._max_z_rate = 1.5 #m/s que tiene de cambio abrupto.
-        self._rejection_count = 0 #Contador de rechazos en la estimazión de z.
-        self._rejection_persistence = 100
+        self._max_z_rate = 0.8 #m/s que tiene de cambio abrupto.
+        # self._rejection_count = 0 #Contador de rechazos en la estimazión de z.
+        # self._rejection_persistence = 100
 
     def reset_estimator(self, scf):
         """
@@ -56,7 +56,7 @@ class CrazyfliePosePublisher:
         self.node.get_logger().info("Reseteando estimador Kalman...")
 
         try:
-            scf.cf.param.set_value('kalman.mRangeStd', '1.0')
+            scf.cf.param.set_value('kalman.mRangeStd', '1.5')
 
         except Exception as e:
             self.node.get_logger().error(f"Error setting kalman.mRangeStd: {e}")
@@ -122,22 +122,17 @@ class CrazyfliePosePublisher:
         raw_z = data['kalman.stateZ']
 
         if delta_t > 0:
-            vz = abs(raw_z - self._last_valid_z) / delta_t
-            if vz > self._max_z_rate:
-                self._rejection_count += 1
-                if self._rejection_count < self._rejection_persistence: #Si dura menos de 20Hz, se rechaza el dato
-                    filtered_z = self._last_valid_z
-                else: #Se acepta el nuevo dato, ya que duro más de 1s en la misma altura
-                    filtered_z = raw_z
-                    self._last_valid_z = filtered_z
-                    self._rejection_count = 0
-            else:
-                filtered_z = raw_z
-                self._last_valid_z = filtered_z
-                self._rejection_count = 0
+            max_step = self._max_z_rate * delta_t
+            diff = raw_z - self._last_valid_z
+            step = max(min(diff, max_step), -max_step)
+            filtered_z = self._last_valid_z + step
         else:
             filtered_z = raw_z
-            self._last_valid_z = filtered_z
+
+        self._last_valid_z = filtered_z
+
+        self.node.get_logger().debug(
+            f"z_raw={raw_z:.3f} z_filtered={filtered_z:.3f} delta_t={delta_t:.3f}")
 
         self._last_time_pos = current_time
         self._last_pos = (raw_x, raw_y, filtered_z)
