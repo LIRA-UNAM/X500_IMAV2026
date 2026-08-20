@@ -57,7 +57,7 @@ Z_CONGELADA = None
 
 class MotionCommander:
     """The motion commander"""
-    VELOCITY = 0.2
+    VELOCITY = 0.5
     RATE = 360.0 / 5
 
     def __init__(self, crazyflie, default_height=0.3):
