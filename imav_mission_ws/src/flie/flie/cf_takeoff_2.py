@@ -10,7 +10,8 @@ from cflib.positioning.motion_commander import MotionCommander
 
 from flie.pose_publisher import CrazyfliePosePublisher
 
-URI = 'radio://0/80/2M'
+# URI = 'radio://0/80/2M'
+URI = 'radio://0/70/2M/E7E7E7E7E5' #Segundo CrazyFlie
 
 SM_DISCONNECTED = 0
 SM_WAIT_TAKEOFF = 10
@@ -75,6 +76,10 @@ class CFHardwareNode(Node):
         if self.state == SM_DISCONNECTED:
             self.scf = SyncCrazyflie(URI)
             self.scf.open_link()
+
+            self.get_logger().info("Activación de UKF")
+            self.scf.cf.param.set_value('stabilizer.estimator', '3')  # Activar UKF
+            self.scf.cf.param.set_value('ukf.qualityGateTof', '10.0')
 
             self.pose_publisher.reset_estimator(self.scf)
             self.pose_publisher.start_logging(self.scf)

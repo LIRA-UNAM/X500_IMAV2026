@@ -78,9 +78,9 @@ class CrazyfliePosePublisher:
         en dos bloques de 12 y 16 bytes.
         """
         log_pos = LogConfig(name='KalmanPos', period_in_ms=100)  # 10 Hz
-        log_pos.add_variable('kalman.stateX', 'float')
-        log_pos.add_variable('kalman.stateY', 'float')
-        log_pos.add_variable('kalman.stateZ', 'float')
+        log_pos.add_variable('stateEstimate.x', 'float')
+        log_pos.add_variable('stateEstimate.y', 'float')
+        log_pos.add_variable('stateEstimate.z', 'float')
         scf.cf.log.add_config(log_pos)
         log_pos.data_received_cb.add_callback(self._position_callback)
         log_pos.error_cb.add_callback(self._log_error_cb)
@@ -109,7 +109,7 @@ class CrazyfliePosePublisher:
     def _position_callback(self, timestamp, data, logconf):
         if not self._got_first_pos:
             self._got_first_pos = True
-            self._last_valid_z = data['kalman.stateZ']
+            self._last_valid_z = data['stateEstimate.z']
             self._last_time_pos = self.node.get_clock().now()
             self._rejection_count = 0
             self.node.get_logger().info(f"Primer dato de posición recibido: {data}")
@@ -117,25 +117,14 @@ class CrazyfliePosePublisher:
         current_time = self.node.get_clock().now()
         delta_t = (current_time - self._last_time_pos).nanoseconds / 1e9
         #Datos del sensor crudos
-        raw_x = data['kalman.stateX']
-        raw_y = data['kalman.stateY']
-        raw_z = data['kalman.stateZ']
-
-        if delta_t > 0:
-            max_step = self._max_z_rate * delta_t
-            diff = raw_z - self._last_valid_z
-            step = max(min(diff, max_step), -max_step)
-            filtered_z = self._last_valid_z + step
-        else:
-            filtered_z = raw_z
-
-        self._last_valid_z = filtered_z
+        raw_x = data['stateEstimate.x']
+        raw_y = data['stateEstimate.y']
+        raw_z = data['stateEstimate.z']
 
         self.node.get_logger().debug(
-            f"z_raw={raw_z:.3f} z_filtered={filtered_z:.3f} delta_t={delta_t:.3f}")
+            f"x={raw_x:.3f}, y={raw_y:.3f}, z={raw_z:.3f}")
 
-        self._last_time_pos = current_time
-        self._last_pos = (raw_x, raw_y, filtered_z)
+        self._last_pos = (raw_x, raw_y, raw_z)
         self._publish_pose()
 
     def _orientation_callback(self, timestamp, data, logconf):
