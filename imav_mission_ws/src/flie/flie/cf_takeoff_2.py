@@ -10,8 +10,8 @@ from cflib.positioning.motion_commander import MotionCommander
 
 from flie.pose_publisher import CrazyfliePosePublisher
 
-# URI = 'radio://0/80/2M'
-URI = 'radio://0/70/2M/E7E7E7E7E5' #Segundo CrazyFlie
+URI = 'radio://0/80/2M'
+#URI = 'radio://0/70/2M/E7E7E7E7E5' #Segundo CrazyFlie
 
 SM_DISCONNECTED = 0
 SM_WAIT_TAKEOFF = 10
@@ -104,17 +104,17 @@ class CFHardwareNode(Node):
 
         elif self.state == SM_LANDING:
             if self.mc:
-                land_velocity = VELOCITY_EMER if self.emergency_landing else VELOCITY_LAND    
-                self.mc.land(velocity=land_velocity)
+                if self.emergency_landing:
+                    self.mc.emergenvy_stop()
+                else:
+                    self.mc.land(velocity=VELOCITY_LAND)
                 self.mc = None
+            if self.scf:
+                self.scf.close_link()
+                self.scf = None
 
-                if self.scf:
-                    self.scf.close_link()
-                    self.scf = None
-
-
-                self.emergency_landing = False
-                self.timer.cancel()
+            self.emergency_landing = False
+            self.timer.cancel()
 
     def destroy_node(self):
         if self.mc:

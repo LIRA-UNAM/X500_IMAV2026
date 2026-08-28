@@ -129,6 +129,15 @@ class MotionCommander:
             self._cf.commander.send_notify_setpoint_stop()
             self._is_flying = False
 
+    def emergency_stop(self):
+        if self._is_flying:
+            self._thread.stop()
+            self._thread = None
+
+            self._cf.commander.send_stop_setpoint()
+            self._cf.commander.send_notify_setpoint_stop()
+            self._is_flying = False
+
     def __enter__(self):
         self.take_off()
         return self
