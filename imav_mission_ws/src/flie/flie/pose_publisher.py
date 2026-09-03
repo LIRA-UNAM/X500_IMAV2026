@@ -44,7 +44,7 @@ class CrazyfliePosePublisher:
         self._last_valid_z = 0.0
         self._last_time_pos = None
         self._max_z_rate = 0.8 #m/s que tiene de cambio abrupto.
-        # self._rejection_count = 0 #Contador de rechazos en la estimazión de z.
+        self._rejection_count = 0 #Contador de rechazos en la estimación de z.
         # self._rejection_persistence = 100
 
     def reset_estimator(self, scf):
@@ -54,12 +54,6 @@ class CrazyfliePosePublisher:
         posición física donde estaba el dron al arrancar el nodo.
         """
         self.node.get_logger().info("Reseteando estimador Kalman...")
-
-        try:
-            scf.cf.param.set_value('kalman.mRangeStd', '1.5')
-
-        except Exception as e:
-            self.node.get_logger().error(f"Error setting kalman.mRangeStd: {e}")
 
         scf.cf.param.set_value('kalman.resetEstimation', '1')
         time.sleep(0.1)
@@ -87,10 +81,10 @@ class CrazyfliePosePublisher:
         log_pos.start()
 
         log_quat = LogConfig(name='KalmanQuat', period_in_ms=100)  # 10 Hz
-        log_quat.add_variable('kalman.q0', 'float')
-        log_quat.add_variable('kalman.q1', 'float')
-        log_quat.add_variable('kalman.q2', 'float')
-        log_quat.add_variable('kalman.q3', 'float')
+        log_quat.add_variable('stateEstimate.qw', 'float')
+        log_quat.add_variable('stateEstimate.qx', 'float')
+        log_quat.add_variable('stateEstimate.qy', 'float')
+        log_quat.add_variable('stateEstimate.qz', 'float')
         scf.cf.log.add_config(log_quat)
         log_quat.data_received_cb.add_callback(self._orientation_callback)
         log_quat.error_cb.add_callback(self._log_error_cb)
@@ -133,10 +127,10 @@ class CrazyfliePosePublisher:
             self.node.get_logger().info(f"Primer dato de orientación recibido: {data}")
         # kalman.q0 = w, q1 = x, q2 = y, q3 = z
         self._last_quat = (
-            data['kalman.q0'],
-            data['kalman.q1'],
-            data['kalman.q2'],
-            data['kalman.q3'],
+            data['stateEstimate.qw'],
+            data['stateEstimate.qx'],
+            data['stateEstimate.qy'],
+            data['stateEstimate.qz'],
         )
         self._publish_pose()
 
