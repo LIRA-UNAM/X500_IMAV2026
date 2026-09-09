@@ -55,9 +55,9 @@ class CrazyfliePosePublisher:
         """
         self.node.get_logger().info("Reseteando estimador Kalman...")
 
-        scf.cf.param.set_value('kalman.resetEstimation', '1')
+        scf.cf.param.set_value('ukf.resetEstimation', '1')
         time.sleep(0.1)
-        scf.cf.param.set_value('kalman.resetEstimation', '0')
+        scf.cf.param.set_value('ukf.resetEstimation', '0')
         time.sleep(2.0)  # tiempo para que el filtro converja
         self.node.get_logger().info("Estimador reseteado. Origen fijado en la posición actual.")
 
