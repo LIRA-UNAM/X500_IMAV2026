@@ -222,3 +222,4 @@ PX4-Autopilot/build/
 imav_mission_ws/log/
 imav_mission_ws/build/
 imav_mission_ws/install/
+venv/
