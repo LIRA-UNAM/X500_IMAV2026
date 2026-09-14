@@ -6,38 +6,41 @@ Plataforma de desarrollo: entorno virtual Python ....
 Plataforma de aterrizaje: Aruco ID:5, 80x80cm, movimiento horizontal a 0.1m/s, y con un giro 15° en Pitch.
 
 """
+from djitellopy import Tello #
 
 import cv2
 import numpy as np
 import time
 import cv2.aruco as aruco 
 CAMERA_MATRIX = np.array([
-    [921.170702, 0.0, 459.904354],
-    [0.0, 919.018377, 351.238301],
-    [0.0, 0.0, 1.0]
+    [887.927782, 0.000000, 487.689452],
+    [0.000000, 890.293534, 330.329207],
+    [0.000000, 0.000000, 1.000000]
 ], dtype=np.float64)
-DIST_COEFFS = np.array|([-0.033458, 0.105152, 0.001256, -0.006647, 0.0])
+DIST_COEFFS = np.array([0.053930, -0.887274, -0.006077, -0.000734, 2.851333])
 
-MARKER_LENGHT = 0.08
+MARKER_LENGHT = 0.25
 
 def aterrizar_en_plataforma(tello, id_objetivo=0):
 
-    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_5X5_100)
     parameters = aruco.DetectorParameters()
     detector = aruco.ArucoDetector(aruco_dict, parameters)
 
-    KP_X = 0.30
-    KP_Y = 0.30
-    KP_Z = 0.30
+    KP_X = 0.25
+    KP_Y = 0.25
+    KP_Z = 0.25
 
     DIST_APROX = 1.0
-    DIST_ATERRIZAJE = 0.35 
+    DIST_ATERRIZAJE = 0.20
 
-    FF_PLATAFORMA = 10
+    FF_PLATAFORMA = 0 #10
 
     MAX_PERDIDA_FRAMES = 60
 
     frames_sin_marcador = 0 
+
+    cv2.namedWindow("Aterrizaje - Quique", cv2.WINDOW_NORMAL)
 
     while True:
         frame = tello.get_frame_read().frame
@@ -106,5 +109,37 @@ def aterrizar_en_plataforma(tello, id_objetivo=0):
  
     cv2.destroyAllWindows()
 
-            
+if __name__ == "__main__":
+    # 1. Inicializar y conectar
+    tello = Tello()
+    tello.connect()
+    print(f"Batería actual: {tello.get_battery()}%")
+    
+    if tello.get_battery() < 15:
+        print("Batería muy baja para volar, por favor cambia la pila.")
+    else:
+        # 2. Encender cámara y esperar a que inicialice el flujo de video
+        tello.streamon()
+        time.sleep(2)
 
+        # 3. Despegue
+        print("Despegando para prueba estática...")
+        tello.takeoff()
+        
+        # Opcional: Si pegaste el ArUco muy alto en la pared, descomenta la siguiente línea 
+        # para que el dron suba un poco antes de empezar a buscarlo:
+        tello.move_down(25) 
+
+        try:
+            # 4. Llamar a tu función de aterrizaje
+            # OJO: Cambia el id_objetivo al número exacto del ArUco que imprimiste
+            aterrizar_en_plataforma(tello, id_objetivo=0)
+            
+        except Exception as e:
+            print(f"Error inesperado durante la prueba: {e}")
+            tello.land() # Aterrizaje de emergencia si tu código falla
+            
+        finally:
+            # Siempre apagar el flujo de video al terminar
+            tello.streamoff()
+            tello.end()
