@@ -12,7 +12,7 @@ import numpy as np
 import time
 import cv2.aruco as aruco 
 CAMERA_MATRIX = np.array([
-    921.170702, 0.0, 459.904354],
+    [921.170702, 0.0, 459.904354],
     [0.0, 919.018377, 351.238301],
     [0.0, 0.0, 1.0]
 ], dtype=np.float64)
@@ -72,13 +72,39 @@ def aterrizar_en_plataforma(tello, id_objetivo=0):
             ud = int(np.clip(KP_Y * error_y, -30, 30))
 
 
-            error_z = distancia - DIST_APPROX
+            error_z = distancia - DIST_APROX
             fb = int(np.clip(KP_Z * error_z, -25, 25)) +FF_PLATAFORMA
 
             tello.send_rc_control(lr, fb, ud, 0)
 
             print(f"dist={distancia: .2f}m err_x={error_x} err_y={error_y} "
                   f"-> lr={lr} fb={fb} ud={ud}")
+
+            if error_x < -40:
+                print("Izquierda")
+            elif error_x > 40:
+                print("Derecha")
+            if ud < 0:
+                print("Bajar")
+ 
+            if distancia < DIST_ATERRIZAJE:
+                print("Plataforma alcanzada, apagando motores.")
+                tello.land()
+                break
+        else:
+            frames_sin_marcador += 1
+            tello.send_rc_control(0, 0, 0, 0)
+            if frames_sin_marcador > MAX_PERDIDA_FRAMES:
+                print("Marcador perdido por mucho tiempo — aterrizando por seguridad.")
+                tello.land()
+                break
+ 
+        cv2.imshow("Aterrizaje - Quique", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            tello.land()
+            break
+ 
+    cv2.destroyAllWindows()
 
             
 
