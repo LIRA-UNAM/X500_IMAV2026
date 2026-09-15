@@ -86,7 +86,7 @@
 #             self.y_b = self.y
 from djitellopy import Tello
 import time
-
+import math
 
 class Navigation:
     MIN = 20
@@ -101,6 +101,7 @@ class Navigation:
 
         self.x_b = 0
         self.y_b = 0
+        self.current_yaw = 0
 
     def takeoff(self):
         self.tello.takeoff()
@@ -110,16 +111,32 @@ class Navigation:
         self.tello.land()
         time.sleep(2)
 
-    def coord(self, x:int, y:int, z:int):
+    def stop_e(self):
+        print("Paro de EMERGENCIA")
+        self.tello.emergency()
 
+    def rotation(self, angle:int):
+        if angle > 0: 
+            self.tello.rotate_clockwise(angle)
+
+        if angle < 0:
+            self.tello.rotate_counter_clockwise(abs(angle))
+        
+        self.current_yaw = (self.current_yaw + angle) % 360
+        
+        time.sleep(3.0)
+
+    def coord(self, x:int, y:int, z:int):
         self.tx = x*100
         self.ty = y*100
         self.tz = z*100
 
         self.current_z = self.tello.get_height()
 
-        dx = self.tx - self.x_b
-        dy = self.ty - self.y_b
+        w_dx = self.tx - self.x_b
+        w_dy = self.ty - self.y_b 
+        # dx = self.tx - self.x_b
+        # dy = self.ty - self.y_b
         dz = self.tz - self.current_z
 
         if dz != 0:
@@ -129,20 +146,28 @@ class Navigation:
                 elif dz < 0:
                     self.tello.move_down(abs(dz))
 
-        if dx != 0:
-            if self.MIN <= abs(dx) <= self.MAX:
-                if dx > 0:
-                    self.tello.move_forward(dx)
-                elif dx < 0:
-                    self.tello.move_back(abs(dx))
-                self.x_b = self.tx
+        rad = math.radians(self.current_yaw)
 
-        if dy != 0:
-            if self.MIN <= abs(dy) <= self.MAX:
-                if dy > 0:
-                    self.tello.move_right(dy)
-                elif dy < 0:
-                    self.tello.move_left(abs(dy))
+        loal_dx = w_dx * math.cos(rad) + w_dy * math.sin(rad)
+        loal_dy = -w_dx * math.sin(rad) + w_dy * math.cos(rad)
+
+        local_dx = int(round(loal_dx))
+        local_dy = int(round(loal_dy))
+
+        if local_dx != 0:
+            if self.MIN <= abs(local_dx) <= self.MAX:
+                if local_dx > 0:
+                    self.tello.move_forward(local_dx)
+                elif local_dx < 0:
+                    self.tello.move_back(abs(local_dx))
+                self.x_b = self.tx
+                    
+        if local_dy != 0:
+            if self.MIN <= abs(local_dy) <= self.MAX:
+                if local_dy > 0:
+                    self.tello.move_right(local_dy)
+                elif local_dy < 0:
+                    self.tello.move_left(abs(local_dy))
                 self.y_b = self.ty
 
 if __name__ == "__main__":
@@ -150,4 +175,6 @@ if __name__ == "__main__":
     nav = Navigation(tello)
     nav.takeoff()
     nav.coord(1, 0, 1)
+    nav.rotation(180)
+    nav.coord(0, 0, 1)
     nav.land()
