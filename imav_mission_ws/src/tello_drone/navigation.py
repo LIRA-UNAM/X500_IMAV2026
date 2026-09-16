@@ -126,10 +126,10 @@ class Navigation:
         
         time.sleep(3.0)
 
-    def coord(self, x:int, y:int, z:int):
-        self.tx = x*100
-        self.ty = y*100
-        self.tz = z*100
+    def coord(self, x:float, y:float, z:float):
+        self.tx = int(round(x*100))
+        self.ty = int(round(y*100))
+        self.tz = int(round(z*100))
 
         self.current_z = self.tello.get_height()
 
@@ -170,11 +170,11 @@ class Navigation:
                     self.tello.move_left(abs(local_dy))
                 self.y_b = self.ty
 
-if __name__ == "__main__":
-    tello = Tello()
-    nav = Navigation(tello)
-    nav.takeoff()
-    nav.coord(1, 0, 1)
-    nav.rotation(180)
-    nav.coord(0, 0, 1)
-    nav.land()
+# if __name__ == "__main__":
+#     tello = Tello()
+#     nav = Navigation(tello)
+#     nav.takeoff()
+#     nav.coord(1, 0, 1)
+#     nav.rotation(180)
+#     nav.coord(0, 0, 1)
+#     nav.land()

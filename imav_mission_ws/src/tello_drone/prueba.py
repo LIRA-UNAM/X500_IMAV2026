@@ -20,7 +20,7 @@ CAMERA_MATRIX = np.array(
 )
 DIST_COEFFS = np.array([0.053930, -0.887274, -0.006077, -0.000734, 2.851333])
 
-MARKER_LENGTH = 0.25  # Longitud real del lado del marcador en metros (25 cm)
+MARKER_LENGTH = 0.25 # Longitud real del lado del marcador en metros (25 cm)
 
 
 def estimate_marker_pose(corners, marker_length, camera_matrix, dist_coeffs):
@@ -56,13 +56,13 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
   detector = aruco.ArucoDetector(aruco_dict, parameters)
 
   # Ganancias de control proporcional
-  KP_X = 0.25
-  KP_Y = 0.15
-  KP_Z = 0.25
+  KP_X = 0.22
+  KP_Y = 0.22
+  KP_Z = 0.22
 
-  DIST_APROX = 1.0
-  DIST_ATERRIZAJE = 0.25  # Distancia umbral en metros para iniciar el corte/aterrizaje
-  FF_PLATAFORMA = 0
+  DIST_APROX = 0.0
+  DIST_ATERRIZAJE = 0.10  # Distancia umbral en metros para iniciar el corte/aterrizaje
+  FF_PLATAFORMA = 10
 
   TIEMPO_MAX_PERDIDA = 4.0
   tiempo_ultima_vista = time.time()
@@ -127,7 +127,8 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
         if distancia < DIST_ATERRIZAJE:
           print("[INFO] Plataforma alcanzada. Aterrizando...")
           tello.send_rc_control(0, 0, 0, 0)
-          tello.land()
+          # tello.land()
+          tello.emergency()
           break
 
       else:
@@ -138,7 +139,8 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
               "[WARN] Marcador perdido por más de 4 segundos. Aterrizaje de"
               " seguridad."
           )
-          tello.land()
+          # tello.land()
+          tello.emergency()
           break
 
       cv2.imshow("Aterrizaje - Tello", frame_resized)
@@ -177,7 +179,7 @@ if __name__ == "__main__":
     print("Despegando para prueba...")
     tello.takeoff()
     time.sleep(1.0)
-    tello.move_down(25)
+    # tello.move_down(25)
     time.sleep(1.0)
 
     try:
