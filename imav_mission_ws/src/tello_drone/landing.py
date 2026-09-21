@@ -45,11 +45,11 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
 
     # Ganancias de control proporcional
     KP_X = 0.22
-    KP_Y = 0.22
+    KP_Y = 0.22 #Con estas funcionaba bien en el lab, 
     KP_Z = 0.22
 
     DIST_APROX = 0.0
-    DIST_ATERRIZAJE = 0.10  # Distancia umbral en metros para iniciar el corte/aterrizaje
+    DIST_ATERRIZAJE = 0.10  # Distancia umbral en metros para iniciar el aterrizaje
     FF_PLATAFORMA = 10
 
     TIEMPO_MAX_PERDIDA = 4.0
