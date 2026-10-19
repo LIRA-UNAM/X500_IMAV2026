@@ -34,10 +34,11 @@ def main():
     try:
         # FASE 1: EVASIÓN DE OBSTÁCULOS
         print("\n[MISIÓN] FASE 1: Iniciando recorrido de navegación...")
-        nav.takeoff()
-        
+
         # Aquí debemos de poner todas las coordenadas de la ruta de navegación.
-        nav.coord(0,0,1)
+        # nav.takeoff()
+        # nav.coord(0, 0, 0.5) #Prueba
+        # nav.coord(0,2.7,1.2)
         # time.sleep(1)
         # nav.coord(0.9,2.7,1.2)
         # time.sleep(1)
@@ -90,6 +91,35 @@ def main():
         nav.coord(3.2, 5.45, 1.3)
         nav.coord(1.0, 5.45, 1.3)
 
+        #Esta forma es la del imav ------------------------------
+        y_1 = 2.45 # ṕrimer tramo
+
+        y_2 = 2.25 # tramo para esquivar los tubos rojos
+
+        y_3 = 4.20 #tramo final (son como 175)
+        nav.takeoff()
+        # nav.coord(0, 0, 1)
+        nav.coord(0, y_1, 1.2)
+        time.sleep(2)
+        nav.coord(1.3, y_1, 1.2)
+        nav.coord(2.3, y_1, 2.4)
+        time.sleep(2)
+        nav.coord(2.3, y_1, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, y_1, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, y_2, 1.2)
+        time.sleep(2)
+        nav.coord(5.2, y_2, 1.2)
+        nav.coord(5.2, y_1, 1.3) #170cm desde la mitad de los tubos
+        nav.coord(7.0, y_1, 1.3)
+        time.sleep(2)
+        nav.rotation(180)
+        nav.coord(7.0, y_3, 1.3)
+        nav.coord(4.2, y_3, 1.3)
+        nav.coord(3.2, y_3, 0.8)
+        nav.coord(0.20, y_3, 0.8)#Bajar el x, tiene que quedar más lejos para qu ela vison pueda detectar
+        #O acercarse más para que aterrice solo en la plataforma.
         
         print("[MISIÓN] FASE 1 Completada. Aproximación final alcanzada.")
 
