@@ -78,8 +78,8 @@ class CFHardwareNode(Node):
             self.scf.open_link()
 
             self.get_logger().info("Activación de UKF")
-            self.scf.cf.param.set_value('stabilizer.estimator', '2')  # Activar UKF
-            self.scf.cf.param.set_value('ukf.qualityGateTof', '200.0')
+            self.scf.cf.param.set_value('stabilizer.estimator', '3')  # Activar UKF
+            self.scf.cf.param.set_value('ukf.qualityGateTof', '10.0')
 
             self.pose_publisher.reset_estimator(self.scf)
             self.pose_publisher.start_logging(self.scf)

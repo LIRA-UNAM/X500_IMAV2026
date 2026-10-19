@@ -170,6 +170,17 @@ class Navigation:
                     self.tello.move_left(abs(local_dy))
                 self.y_b = self.ty
 
+    def print_position(self):
+        """Imprime la posición actual estimada (X, Y) y la altura real (Z)."""
+        current_z = self.tello.get_height()
+        
+        # Convertimos de centímetros a metros para la visualización
+        x_m = self.x_b / 100.0
+        y_m = self.y_b / 100.0
+        z_m = current_z / 100.0
+        
+        print(f"[POSICIÓN] X: {x_m:.2f}m | Y: {y_m:.2f}m | Z: {z_m:.2f}m | Yaw: {self.current_yaw}°")
+
 # if __name__ == "__main__":
 #     tello = Tello()
 #     nav = Navigation(tello)

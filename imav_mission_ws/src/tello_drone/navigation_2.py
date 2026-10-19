@@ -7,7 +7,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 
-class Navigation:
+class Navigation_2:
     MIN = 20
     MAX = 500
 

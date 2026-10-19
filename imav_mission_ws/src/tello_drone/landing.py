@@ -14,7 +14,7 @@ CAMERA_MATRIX = np.array(
 )
 DIST_COEFFS = np.array([0.053930, -0.887274, -0.006077, -0.000734, 2.851333])
 
-MARKER_LENGTH = 0.25  # Longitud real del lado del marcador en metros (25 cm)
+MARKER_LENGTH = 0.80  # Longitud real del lado del marcador en metros (25 cm)
 
 def estimate_marker_pose(corners, marker_length, camera_matrix, dist_coeffs):
     """Reemplazo directo de cv2.aruco.estimatePoseSingleMarkers usando cv2.solvePnP."""
@@ -49,10 +49,10 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
     KP_Z = 0.22
 
     DIST_APROX = 0.0
-    DIST_ATERRIZAJE = 0.10  # Distancia umbral en metros para iniciar el aterrizaje
+    DIST_ATERRIZAJE = 0.2  # Distancia umbral en metros para iniciar el aterrizaje
     FF_PLATAFORMA = 10
 
-    TIEMPO_MAX_PERDIDA = 4.0
+    TIEMPO_MAX_PERDIDA = 8.0
     tiempo_ultima_vista = time.time()
 
     cv2.namedWindow("Aterrizaje - Tello", cv2.WINDOW_NORMAL)
@@ -111,6 +111,7 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
                 if (time.time() - tiempo_ultima_vista) > TIEMPO_MAX_PERDIDA:
                     print("[WARN] Marcador perdido por más de 4 segundos. Aterrizaje de seguridad.")
                     tello.emergency()
+                    # tello.land()
                     break
 
             cv2.imshow("Aterrizaje - Tello", frame_resized)
@@ -118,6 +119,7 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
             tello.send_rc_control(0, 0, 0, 0)
             if (time.time() - tiempo_ultima_vista) > TIEMPO_MAX_PERDIDA:
                 print("[WARN] Señal de video perdida. Aterrizando...")
+                # tello.emergency()
                 tello.land()
                 break
 
@@ -125,6 +127,7 @@ def aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0):
             print("[INFO] Abortado con tecla 'q'.")
             tello.send_rc_control(0, 0, 0, 0)
             tello.land()
+            # tello.emergency()
             break
 
     cv2.destroyAllWindows()
