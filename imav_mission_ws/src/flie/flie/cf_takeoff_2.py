@@ -8,7 +8,7 @@ import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 
-from flie.pose_publisher import CrazyfliePosePublisher
+from flie.pose_publisher_ukf import CrazyfliePosePublisher
 
 URI = 'radio://0/80/2M'
 #URI = 'radio://0/70/2M/E7E7E7E7E5' #Segundo CrazyFlie

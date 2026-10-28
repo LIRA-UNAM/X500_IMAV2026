@@ -11,7 +11,8 @@ from cflib.positioning.motion_commander import MotionCommander
 
 from flie.pose_publisher import CrazyfliePosePublisher
 
-URI = 'radio://0/80/2M'
+#URI = 'radio://0/80/2M'
+URI = 'radio://0/70/2M/E7E7E7E7E5'
 
 # Drone states
 STATE_DISCONNECTED = 0
