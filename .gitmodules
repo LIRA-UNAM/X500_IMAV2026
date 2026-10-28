@@ -4,3 +4,7 @@
 [submodule "imav_mission_ws/src/px4_msgs"]
 	path = imav_mission_ws/src/px4_msgs
 	url = https://github.com/PX4/px4_msgs.git
+[submodule "imav_mission_ws/src/OrbbecSDK_ROS2"]
+	path = imav_mission_ws/src/OrbbecSDK_ROS2
+	url = https://github.com/orbbec/OrbbecSDK_ROS2.git
+	branch = v2-main

@@ -105,7 +105,8 @@ class CFHardwareNode(Node):
         elif self.state == SM_LANDING:
             if self.mc:
                 if self.emergency_landing:
-                    self.mc.emergenvy_stop()
+                    self.mc.stop()
+                    self.mc.land(velocity=VELOCITY_EMER)
                 else:
                     self.mc.land(velocity=VELOCITY_LAND)
                 self.mc = None

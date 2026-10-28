@@ -5,12 +5,22 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from px4_msgs.msg import VehicleOdometry
-from tf_transformations import quaternion_multiply, quaternion_inverse
+# from tf_transformations import quaternion_multiply, quaternion_inverse
+
 
 # Fixed rotations between PX4 and ROS conventions (q: x, y, z, w)
 _Q_NED_TO_ENU = (0.70710678, 0.70710678, 0.0, 0.0)  # world: NED -> ENU
 _Q_FRD_TO_FLU = (1.0, 0.0, 0.0, 0.0)                # body:  FRD -> FLU
 
+def quaternion_multiply(q1, q2):
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return (
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2
+    )
 
 class OdomToTFNode(Node):
 

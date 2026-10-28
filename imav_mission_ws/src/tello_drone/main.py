@@ -1,0 +1,151 @@
+"""
+Pumas - LIRA - UNAM
+Script for Tello Drone Control
+
+Planeación de la misión completa, completar la ruta.
+"""
+
+import os
+import time
+import cv2
+from djitellopy import Tello
+
+# Forzar backend X11/XCB para evitar el congelamiento de ventanas en Ubuntu
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+from navigation import Navigation
+from landing import aterrizar_en_plataforma
+
+def main():
+    print("[SISTEMA] Inicializando instancia del dron...")
+    tello = Tello()
+    nav = Navigation(tello)
+
+    if tello.get_battery() < 15:
+        print("[ERROR] Batería insuficiente (< 15%). Cambia la batería antes de volar.")
+        return
+
+    # PREPARACIÓN DE HARDWARE (Video)
+
+    tello.streamon()
+    frame_reader = tello.get_frame_read()
+    time.sleep(2.0)
+
+    try:
+        # FASE 1: EVASIÓN DE OBSTÁCULOS
+        print("\n[MISIÓN] FASE 1: Iniciando recorrido de navegación...")
+
+        # Aquí debemos de poner todas las coordenadas de la ruta de navegación.
+        # nav.takeoff()
+        # nav.coord(0, 0, 0.5) #Prueba
+        # nav.coord(0,2.7,1.2)
+        # time.sleep(1)
+        # nav.coord(0.9,2.7,1.2)
+        # time.sleep(1)
+        # nav.coord(0.9,2.7,2.1)
+        # time.sleep(1)
+        # nav.coord(0.9,2.7,2.1)
+        # time.sleep(1)
+        # nav.coord(1.9,2.7,2.1)
+        # time.sleep(1)
+        # nav.coord(1.9,2.7,0.3)
+        # time.sleep(1)
+        # nav.coord(2.9,2.7,0.3)
+        # time.sleep(1)
+        # nav.coord(3.9,2.7,0.3)
+        # time.sleep(1)
+        # nav.coord(3.9,2.7, 1)
+        # time.sleep(1)
+        # nav.coord(4.9,2.7,1)
+        # time.sleep(1)
+        # nav.coord(4.9,2.7,1.2)
+        # time.sleep(1)
+        # nav.coord(6,2.7,1.2)
+        # time.sleep(1)
+        # nav.coord(4.9,4.9,1.2)
+        # time.sleep(1)
+        # nav.rotation(180)
+        # nav.coord(3,4.9,1.2)
+        
+        #Coordenadas tomadas en el IMAV
+        nav.takeoff()
+        nav.coord(0, 0, 1)
+        nav.coord(0, 2.62, 1.2)
+        time.sleep(2)
+        nav.coord(1.3, 2.62, 1.3)
+        nav.coord(2.3, 2.62, 2.4)
+        time.sleep(2)
+        nav.coord(2.3, 2.62, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, 2.62, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, 2.25, 1.2)
+        time.sleep(2)
+        nav.coord(5.2, 2.25, 1.2)
+        nav.coord(5.2, 2.62, 1.3)
+        nav.coord(6.2, 2.62, 1.3)
+        time.sleep(2)
+        nav.rotation(180)
+        nav.coord(6.2, 5.45, 1.3)
+        nav.coord(4.2, 5.45, 1.3)
+        nav.coord(3.2, 5.45, 1.3)
+        nav.coord(1.0, 5.45, 1.3)
+
+        #Esta forma es la del imav ------------------------------
+        y_1 = 2.45 # ṕrimer tramo
+
+        y_2 = 2.25 # tramo para esquivar los tubos rojos
+
+        y_3 = 4.20 #tramo final (son como 175)
+        nav.takeoff()
+        # nav.coord(0, 0, 1)
+        nav.coord(0, y_1, 1.2)
+        time.sleep(2)
+        nav.coord(1.3, y_1, 1.2)
+        nav.coord(2.3, y_1, 2.4)
+        time.sleep(2)
+        nav.coord(2.3, y_1, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, y_1, 0.3)
+        time.sleep(2)
+        nav.coord(4.3, y_2, 1.2)
+        time.sleep(2)
+        nav.coord(5.2, y_2, 1.2)
+        nav.coord(5.2, y_1, 1.3) #170cm desde la mitad de los tubos
+        nav.coord(7.0, y_1, 1.3)
+        time.sleep(2)
+        nav.rotation(180)
+        nav.coord(7.0, y_3, 1.3)
+        nav.coord(4.2, y_3, 1.3)
+        nav.coord(3.2, y_3, 0.8)
+        nav.coord(0.20, y_3, 0.8)#Bajar el x, tiene que quedar más lejos para qu ela vison pueda detectar
+        #O acercarse más para que aterrice solo en la plataforma.
+        
+        print("[MISIÓN] FASE 1 Completada. Aproximación final alcanzada.")
+
+        # FASE 2: VISIÓN Y ATERRIZAJE AUTÓNOMO
+        print("\n[MISIÓN] FASE 2: Buscando ArUco ID 0 y cediendo control a OpenCV...")
+        
+        # Pasamos la conexión activa y el flujo de video a tu algoritmo de visión
+        aterrizar_en_plataforma(tello, frame_reader, id_objetivo=0)
+
+    except KeyboardInterrupt:
+        print("\n[ALERTA] Interrupción manual (Ctrl+C). Abortando misión...")
+        # Usamos el paro de emergencia que programaste en tu clase
+        nav.stop_e() 
+        
+    except Exception as e:
+        print(f"\n[ERROR CRÍTICO] Excepción en vuelo: {e}")
+        # Frena cualquier inercia y aterriza suavemente
+        tello.send_rc_control(0, 0, 0, 0)
+        nav.land()
+        
+    finally:
+        # LIMPIEZA Y CIERRE SEGURO
+        tello.streamoff()
+        cv2.destroyAllWindows()
+        tello.end()
+        print("[SISTEMA] Misión finalizada. Conexión cerrada y terminal liberada.")
+
+if __name__ == "__main__":
+    main()
