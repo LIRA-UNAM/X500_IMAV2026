@@ -7,10 +7,11 @@
   <maintainer email="enriquemedranorabak@hotmail.com">quique</maintainer>
   <license>TODO: License declaration</license>
 
-  <depend>rcply</depend>
+  <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
-  <depend>cv_brigde</depend>
   <depend>geometry_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>python3-opencv</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
