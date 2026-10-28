@@ -6,8 +6,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     
-    pkg_dir = get_package_share_directory('flie')
-    rviz_config_path = os.path.join(pkg_dir, 'rviz', 'flie_config.rviz')
+    pkg_dir = get_package_share_directory('takeoff')
+    rviz_config_path = os.path.join(pkg_dir, 'rviz', 'x500_config.rviz')
 
     # Node 1
     node_hardware = Node(
@@ -16,7 +16,7 @@ def generate_launch_description():
         name='hw'
     )
 
-    # Node 5: RViz2 
+    # Node 2: RViz2 
     node_rviz = Node(
         package='rviz2',
         executable='rviz2',
