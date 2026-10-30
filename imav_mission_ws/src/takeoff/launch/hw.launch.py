@@ -1,13 +1,19 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import TimerAction
+from launch.actions import TimerAction, ExecuteProcess
 from launch_ros.actions import Node
 
 def generate_launch_description():
     
     pkg_dir = get_package_share_directory('takeoff')
     rviz_config_path = os.path.join(pkg_dir, 'rviz', 'x500_config.rviz')
+    
+    #MicroXRCEAgent
+    micro_ros_agent = ExecuteProcess(
+        cmd=['MicroXRCEAgent', 'udp4', '-p', '8888'],
+        output='screen'
+    )
 
     # Node 1
     node_hardware = Node(
@@ -26,6 +32,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        node_hardware,
-        TimerAction(period=4.0, actions=[node_rviz]),
+        micro_ros_agent,
+        TimerAction(period=7.0, actions=[node_hardware]),
+        TimerAction(period=9.0, actions=[node_rviz]),
     ])

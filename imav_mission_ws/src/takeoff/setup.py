@@ -15,6 +15,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'),
             glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -33,7 +34,9 @@ setup(
             'simple_move = takeoff.simple_move:main',
             'test_node = takeoff.test_node:main',
             'translate_node = takeoff.cmd_translate:main',
-            'odom_to_tf = takeoff.odom_to_tf:main'
+            'odom_to_tf = takeoff.odom_to_tf:main',
+            'pose_reader = takeoff.pose_reader:main',
+	    'landing_node = takeoff.land:main'
         ],
     },
 )
