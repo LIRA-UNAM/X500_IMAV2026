@@ -31,8 +31,16 @@ def generate_launch_description():
         output='screen'
     )
 
+    #Node 3: Delta
+    node_delta = Node(
+        package='takeoff',
+        executable='delta',
+        name='delta'
+    )
+
     return LaunchDescription([
         micro_ros_agent,
         TimerAction(period=7.0, actions=[node_hardware]),
         TimerAction(period=9.0, actions=[node_rviz]),
+        TimerAction(period=10.5, actions=[node_delta])
     ])
