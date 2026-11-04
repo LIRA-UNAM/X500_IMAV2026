@@ -36,7 +36,8 @@ setup(
             'translate_node = takeoff.cmd_translate:main',
             'odom_to_tf = takeoff.odom_to_tf:main',
             'pose_reader = takeoff.pose_reader:main',
-	    'landing_node = takeoff.land:main'
+	        'landing_node = takeoff.land:main',
+            'delta = takeoff.delta:main'
         ],
     },
 )

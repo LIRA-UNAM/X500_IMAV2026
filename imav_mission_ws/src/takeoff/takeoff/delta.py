@@ -5,7 +5,6 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 from px4_msgs.msg import VehicleOdometry
 from tf_transformations import quaternion_multiply, euler_from_quaternion
 
-# Rotaciones fijas para pasar de PX4 (NED) a ROS (ENU)
 _Q_NED_TO_ENU = (0.70710678, 0.70710678, 0.0, 0.0)
 _Q_FRD_TO_FLU = (1.0, 0.0, 0.0, 0.0)
 
@@ -13,8 +12,9 @@ class OdomDeltaThresholdNode(Node):
     def __init__(self):
         super().__init__('odom_delta_threshold_node')
 
-        # Umbral
+        # Declarar parámetros: 10 cm de distancia y ~10 grados (0.1745 rad) por defecto
         self.declare_parameter('distance_threshold', 0.1)
+        self.declare_parameter('yaw_threshold', 0.1745)
 
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -30,64 +30,79 @@ class OdomDeltaThresholdNode(Node):
             qos_profile
         )
 
-        # Variables para almacenar el estado del punto de referencia anterior
         self.prev_x = None
         self.prev_y = None
         self.prev_z = None
         self.prev_yaw = None
+        
+        self.warned_nan = False
 
-        umbral_inicial = self.get_parameter('distance_threshold').value
-        self.get_logger().info(f"Nodo iniciado. Umbral de distancia configurado a: {umbral_inicial} metros.")
+        umbral_dist = self.get_parameter('distance_threshold').value
+        umbral_yaw = self.get_parameter('yaw_threshold').value
+        self.get_logger().info(
+            f"Nodo iniciado.\n"
+            f"  - Umbral de distancia: {umbral_dist} metros\n"
+            f"  - Umbral de Yaw: {umbral_yaw} radianes"
+        )
+        self.get_logger().info("Esperando datos válidos de odometría...")
 
     def odometry_cb(self, msg: VehicleOdometry):
-        # Ignorar si el estimador aún no inicializa los datos (NaN)
+        # 1. Verificar si el EKF2 está publicando valores nulos
         if any(math.isnan(v) for v in msg.position) or any(math.isnan(v) for v in msg.q):
+            if not self.warned_nan:
+                self.get_logger().warn("Recibiendo 'NaN'. El estimador EKF2 no ha inicializado la posición.")
+                self.warned_nan = True
             return
+        
+        self.warned_nan = False
 
-        # 1. Extraer posición actual y convertir de NED (PX4) a ENU (ROS)
+        # 2. Extraer datos actuales y convertir a ENU
         curr_x = msg.position[1]
         curr_y = msg.position[0]
         curr_z = -msg.position[2]
 
-        # 2. Extraer yaw actual
         q_cur = (msg.q[1], msg.q[2], msg.q[3], msg.q[0]) 
         q_enu = quaternion_multiply(quaternion_multiply(_Q_NED_TO_ENU, q_cur), _Q_FRD_TO_FLU)
         _, _, curr_yaw = euler_from_quaternion(q_enu)
 
-        # 3. Si es el primer dato que recibimos, inicializamos el punto de referencia y salimos
+        # 3. Inicializar el punto de referencia
         if self.prev_x is None:
             self.prev_x = curr_x
             self.prev_y = curr_y
             self.prev_z = curr_z
             self.prev_yaw = curr_yaw
-            self.get_logger().info("Punto de referencia inicial capturado.")
+            self.get_logger().info(f"Punto inicial capturado: X:{curr_x:.2f}, Y:{curr_y:.2f}, Z:{curr_z:.2f}, Yaw:{curr_yaw:.2f}. Esperando movimiento...")
             return
 
-        # 4. Calcular los deltas temporales (solo para medir la distancia)
+        # 4. Calcular deltas temporales (magnitudes absolutas)
         delta_x = curr_x - self.prev_x
         delta_y = curr_y - self.prev_y
         delta_z = curr_z - self.prev_z
-
-        # Calcular la magnitud del vector desplazamiento (distancia euclidiana 3D)
         distancia = math.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
 
-        # Leer el umbral del parámetro (permite cambiarlo dinámicamente si usaras rqt_reconfigure)
-        threshold = self.get_parameter('distance_threshold').value
+        delta_yaw = curr_yaw - self.prev_yaw
+        # Normalizar a rango [-pi, pi]
+        delta_yaw = math.atan2(math.sin(delta_yaw), math.cos(delta_yaw))
+        giro_absoluto = abs(delta_yaw)
 
-        # 5. Evaluar si se superó el umbral
-        if distancia >= threshold:
-            # Calcular delta_yaw y normalizarlo a [-pi, pi]
-            delta_yaw = curr_yaw - self.prev_yaw
-            delta_yaw = math.atan2(math.sin(delta_yaw), math.cos(delta_yaw))
+        # 5. Leer los umbrales dinámicamente
+        dist_threshold = self.get_parameter('distance_threshold').value
+        yaw_threshold = self.get_parameter('yaw_threshold').value
 
-            # Imprimir los valores
+        # 6. Evaluar si ALGUNO de los dos umbrales se ha superado
+        if distancia >= dist_threshold or giro_absoluto >= yaw_threshold:
+            
+            # Identificar qué activó el disparador (solo para impresión)
+            motivo = "DISTANCIA" if distancia >= dist_threshold else "GIRO"
+            if distancia >= dist_threshold and giro_absoluto >= yaw_threshold:
+                motivo = "AMBOS"
+
             self.get_logger().info(
-                f"\n[Movimiento Detectado: {distancia:.3f} m]\n"
+                f"\n[Actualización por: {motivo} | Dist: {distancia:.3f}m, Giro: {giro_absoluto:.3f}rad]\n"
                 f"Deltas -> dx: {delta_x:.4f}m, dy: {delta_y:.4f}m, dz: {delta_z:.4f}m, dyaw: {delta_yaw:.4f}rad"
             )
 
-            # 6. ACTUALIZAR el punto de referencia
-            # El punto actual se convierte en el nuevo punto anterior (se reinicia el contador de distancia)
+            # 7. Actualizar el punto de referencia
             self.prev_x = curr_x
             self.prev_y = curr_y
             self.prev_z = curr_z
@@ -96,12 +111,9 @@ class OdomDeltaThresholdNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = OdomDeltaThresholdNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
+    rclpy.spin(node)
+    node.destroy_node()
+    if rclpy.ok():
         rclpy.shutdown()
 
 if __name__ == '__main__':
