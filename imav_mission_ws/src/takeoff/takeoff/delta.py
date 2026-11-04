@@ -1,6 +1,7 @@
 import math
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 from px4_msgs.msg import VehicleOdometry
 from tf_transformations import quaternion_multiply, euler_from_quaternion
 
@@ -15,12 +16,19 @@ class OdomNode(Node):
         self.declare_parameter('distance_threshold', 0.2)
         self.declare_parameter('yaw_threshold', 0.3)
 
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
         #Subscription to the optical flow data
         self.create_subscription(
             VehicleOdometry,
             '/fmu/out/vehicle_odometry',
             self.odometry_cb,
-            1
+            qos_profile
         )
 
         #Variables for previous values
