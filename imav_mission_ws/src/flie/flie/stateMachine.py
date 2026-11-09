@@ -35,10 +35,8 @@ class CFBrainNode(Node):
         self.command_sent = False  # Evita que publiquemos la misma orden 10 veces por segundo
         
         self.waypoints = [
-            (0.0, -1.0, 1.2),
-            (2.0, -1.0, 1.2),
-            (1.0, -0.5, 1.0),
-            (2.0, -0.5, 1.0)
+            (0.0, 0.0, 0.4),
+            (0.0, 0.0, 0.4)
         ]
         self.current_waypoint_index = 0
 

@@ -27,7 +27,7 @@ class CFWaypointNavigator(Node):
         self.kp_xy = 0.5
         self.kp_z = 0.5
         self.max_vel = 0.5 # Max velocity m/s
-        self.tolerance = 0.05 #Tolerance distance m
+        self.tolerance = 0.15 #Tolerance distance m
         
         # Suscriptores y Publicadores
         self.create_subscription(PoseStamped, 'hardware/pose_raw', self.pose_cb, 10)

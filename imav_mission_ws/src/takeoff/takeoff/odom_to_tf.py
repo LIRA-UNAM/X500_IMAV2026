@@ -11,6 +11,7 @@ from px4_msgs.msg import VehicleOdometry
 # Fixed rotations between PX4 and ROS conventions (q: x, y, z, w)
 _Q_NED_TO_ENU = (0.70710678, 0.70710678, 0.0, 0.0)  # world: NED -> ENU
 _Q_FRD_TO_FLU = (1.0, 0.0, 0.0, 0.0)                # body:  FRD -> FLU
+_Q_YAW_OFFSET = (0.0, 0.0, -0.70710678, 0.70710678)
 
 def quaternion_multiply(q1, q2):
     x1, y1, z1, w1 = q1
@@ -100,7 +101,9 @@ class OdomToTFNode(Node):
 
         q_enu = quaternion_multiply(
             quaternion_multiply(_Q_NED_TO_ENU, q_cur), _Q_FRD_TO_FLU)
-        self.qx_, self.qy_, self.qz_, self.qw_ = q_enu
+        
+        q_final = quaternion_multiply(_Q_YAW_OFFSET, q_enu)
+        self.qx_, self.qy_, self.qz_, self.qw_ = q_final
  
         self.have_pose_ = True
 

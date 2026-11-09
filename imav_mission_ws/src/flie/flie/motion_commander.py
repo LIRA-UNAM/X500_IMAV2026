@@ -60,7 +60,7 @@ class MotionCommander:
     VELOCITY = 0.5
     RATE = 360.0 / 5
 
-    def __init__(self, crazyflie, default_height=0.3):
+    def __init__(self, crazyflie, default_height=0.6):
         """
         Construct an instance of a MotionCommander
 
