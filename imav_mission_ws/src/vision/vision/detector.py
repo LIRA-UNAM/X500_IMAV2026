@@ -37,7 +37,7 @@ class Detector(Node):
         cv_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         
         # Utilizar YOLOv8. El parámetro classes=[62] filtra solo Monitores/TV
-        results = self.model.predict(source=cv_img, classes=[63], verbose=False)
+        results = self.model.predict(source=cv_img, classes=[62], verbose=False)
         
         for r in results:
             for box in r.boxes:
@@ -52,7 +52,7 @@ class Detector(Node):
                 yaw_rad = math.atan((u - self.cx) / self.fx)
                 pitch_rad = math.atan((v - self.cy) / self.fy)
                 
-                yaw_deg = math.degrees(yaw_rad)
+                yaw_deg = -math.degrees(yaw_rad)
                 pitch_deg = math.degrees(pitch_rad)
                 
                 self.get_logger().info(
