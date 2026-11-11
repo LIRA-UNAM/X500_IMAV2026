@@ -98,6 +98,8 @@ class ArucoDetector(Node):
                 ], dtype=np.float32)
 
                 for i in range(len(ids)):
+                    if ids[i][0] != 5:
+                        continue
                     # Nuevo cálculo de Pose usando solvePnP en lugar de estimatePoseSingleMarkers
                     success, rvec, tvec = cv2.solvePnP(
                         obj_points, corners[i][0], self.K, self.D, flags=cv2.SOLVEPNP_IPPE_SQUARE
