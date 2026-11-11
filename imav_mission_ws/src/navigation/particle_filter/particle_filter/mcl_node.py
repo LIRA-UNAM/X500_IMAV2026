@@ -1,0 +1,693 @@
+import rclpy
+import os
+import yaml
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from geometry_msgs.msg import PoseArray, Pose, Quaternion, PoseStamped
+from nav_msgs.msg import Odometry
+from localization_msg.msg import VisionLandmarkArray
+from ament_index_python.packages import get_package_share_directory
+import math
+import random
+import time
+from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformException, LookupException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Pose2D
+
+def yaw_to_quaternion(yaw):
+    q = Quaternion()
+    q.z = math.sin(yaw / 2.0)
+    q.w = math.cos(yaw / 2.0)
+    return q
+# [-pi , pi]
+def angle_diff(a, b):
+    d = a - b
+    return math.atan2(math.sin(d), math.cos(d))
+def get_yaw_from_quaternion (q):
+    """ Converts quaternion to yaw [rad] """
+    siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+    cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+    return math.atan2(siny_cosp, cosy_cosp)
+# ----------------------------------------
+class ParticleFilterNode(Node):
+
+    def __init__(self):
+        super().__init__('particle_filter')
+
+        self._declare_parameters()
+
+        self.current_odom_pose = [0.0, 0.0, 0.0]
+        self.last_odom_time = None
+        self.pose_pub = self.create_publisher(PoseStamped, '/estimated_pose', 10)
+        self.deltas_sub = self.create_subscription(Pose2D, '/drone_deltas', self.motion_callback, 10)
+        map_file = self.get_parameter('map_file').value
+        # 0:ball 1:goal, 2:robot, 3:L, 4:T, 5:X
+        self.map_landmarks ={}
+        self.read_yaml(map_file)
+        self.tf_broadcaster = TransformBroadcaster(self)
+        self.best_x     = self.initial_x
+        self.best_y     = self.initial_y
+        self.best_theta = self.initial_theta
+        self.curr_pose = [0.0,0.0,0.0]
+        #TF2 variables
+        #self.tf_buffer = Buffer()
+        #self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # Timer for TF 10 Hz
+        self.tf_broadcast_timer = self.create_timer(self.tf_broadcast_period, self.publish_tf_continuous)
+#------------------------------------------------------
+        # Particles
+        self.particles = []
+        self.weights = []
+        self.latest_observations = []
+        self.last_odom_pose = None
+        self.particles_pub = self.create_publisher(PoseArray, 'particles', 10)
+
+        # ---- KALMAN FUSION: predicción (movimiento) vs medición (visión) ----
+        # kf_epsilon evita divisiones entre cero cuando una varianza da 0.0
+        # min_variance evita que el filtro se vuelva "sobreconfiado" (K saturado)
+        # cuando por casualidad todas las partículas quedan idénticas.
+        self.kf_gain = (0.0, 0.0, 0.0)       # último (Kx, Ky, Ktheta), útil para debug/logs
+        self.kf_var  = (0.0, 0.0, 0.0)       # última varianza fusionada por eje
+
+        # ---- THROTTLE: evita que se acumule cola de mensajes de visión ----
+        # Si observation_callback tarda más que el periodo entre mensajes
+        # de /vision/landmarks, un executor de un solo hilo NO se pone al
+        # día solo -- la demora crece sin límite mientras el nodo corre
+        # (justo el síntoma de "empieza bien pero se va atrasando cada vez
+        # más"). Este límite fuerza a que solo se procese un mensaje cada
+        # self.min_obs_interval segundos como máximo; los mensajes que
+        # lleguen de más rápido simplemente se descartan (se usa el más
+        # reciente disponible), así el trabajo pendiente nunca crece.
+        max_hz = self.get_parameter("max_observation_hz").value
+        self.min_obs_interval = 1.0 / max_hz if max_hz > 0 else 0.0
+        self.last_obs_process_time = 0.0
+
+        # Initialization
+        self.is_moving = False
+        self.init_particles()
+        # self.timer = self.create_timer(0.1, self.update)
+        self.get_logger().info("Particle filter")
+
+        #  ROS Sub/Pub
+        #self.motion_timer = self.create_timer(self.motion_timer_period, self.tf_callback)
+        self.obs_sub = self.create_subscription(
+            VisionLandmarkArray, '/vision/landmarks',
+            self.observation_callback,
+            qos_profile_sensor_data)
+
+    def _param(self, name, default):
+        self.declare_parameter(name, default)
+        return self.get_parameter(name).value
+
+    def _declare_parameters(self):
+        """Declara y carga todos los parámetros operativos del filtro.
+
+        Los valores por defecto coinciden con los que antes estaban
+        hardcodeados en la clase; se pueden sobreescribir vía un yaml de
+        parámetros (ver config_files/localization/mcl_node.yaml) o con
+        --ros-args -p <nombre>:=<valor>.
+        """
+        self.declare_parameter(
+            "map_file",
+            os.path.join(get_package_share_directory('config_files'), 'maps', 'cancha_beijing.yaml'))
+        self.declare_parameter("max_observation_hz", 8.0)
+
+        # Pose / geometría
+        self.forward_speed = self._param('forward_speed', 0.8)  # no usado actualmente (ver tf_callback)
+        self.fov_rad = math.radians(self._param('fov_deg', 95.0))
+        self.sigma_angle = math.radians(self._param('sigma_angle_deg', 4.0))
+        self.initial_x = self._param('initial_x', 4.0)
+        self.initial_y = self._param('initial_y', -4.5)
+        self.initial_theta = self._param('initial_theta', 1.6)
+        self.field_x = self._param('field_x', 14.0)
+        self.field_y = self._param('field_y', 9.0)
+
+        # Timers
+        self.tf_broadcast_period = self._param('tf_broadcast_period', 0.1)
+        self.motion_timer_period = self._param('motion_timer_period', 0.15)
+
+        # Modelo de movimiento
+        self.alphas = self._param('motion_alphas', [0.0002, 0.0002, 0.001, 0.0001])
+        '''
+        alpha1: Noise in rotation caused by rotation.
+        alpha2: Noise in rotation caused by translation.
+        alpha3: Noise in translation caused by translation.
+        alpha4: Noise in translation caused by rotation.
+        '''
+        self.motion_trans_threshold = self._param('motion_trans_threshold', 0.01)
+        self.motion_rot_threshold = self._param('motion_rot_threshold', 0.02)
+        self.min_dt = self._param('min_dt', 1e-4)
+        self.delta_trans_epsilon = self._param('delta_trans_epsilon', 0.001)
+        self.field_margin = self._param('field_margin', 0.1)
+
+        # Fusión Kalman
+        self.kf_epsilon = self._param('kf_epsilon', 1e-6)
+        self.min_variance_xy = self._param('min_variance_xy', 1e-4)          # m^2
+        self.min_variance_theta = math.radians(self._param('min_variance_theta_deg', 1.0)) ** 2  # rad^2
+
+        # Inicialización de partículas
+        self.num_particles = self._param('num_particles', 800)
+        self.init_sigma_xy = self._param('init_sigma_xy', 0.5)
+        self.init_sigma_theta = math.radians(self._param('init_sigma_theta_deg', 90.0))
+
+        # Modelo de observación / actualización
+        self.min_landmarks_for_correction = self._param('min_landmarks_for_correction', 3)
+        self.divergence_weight_threshold = self._param('divergence_weight_threshold', 1e-5)
+        self.random_injection_fraction = self._param('random_injection_fraction', 0.1)
+        self.neff_resample_fraction = self._param('neff_resample_fraction', 0.5)
+        self.weight_smoothing_alpha = self._param('weight_smoothing_alpha', 0.7)
+        self.weight_sum_epsilon = self._param('weight_sum_epsilon', 1e-8)
+
+        # Resample
+        self.elite_fraction = self._param('elite_fraction', 0.03)
+        self.jitter_xy_still = self._param('jitter_xy_still', 0.001)
+        self.jitter_theta_still = self._param('jitter_theta_still', 0.001)
+        self.jitter_xy_moving = self._param('jitter_xy_moving', 0.01)
+        self.jitter_theta_moving = self._param('jitter_theta_moving', 0.01)
+
+        # Función de similitud
+        self.no_prediction_weight = self._param('no_prediction_weight', 1e-8)
+        self.no_match_weight = self._param('no_match_weight', 1e-6)
+        self.miss_penalty_free_count = self._param('miss_penalty_free_count', 2)
+        self.miss_penalty_base = self._param('miss_penalty_base', 0.5)
+        self.false_positive_free_count = self._param('false_positive_free_count', 3)
+        self.false_positive_penalty_base = self._param('false_positive_penalty_base', 0.3)
+        self.weight_clip_min = self._param('weight_clip_min', 1e-10)
+        self.weight_clip_max = self._param('weight_clip_max', 1.0)
+
+        # Logging
+        self.callback_duration_warn_threshold = self._param('callback_duration_warn_threshold', 0.08)
+
+    # -----------KALMAN FUSION (predicción por movimiento vs medición por visión)-----
+    def weighted_circular_mean(self, angles, weights):
+        """Media circular ponderada de una lista de ángulos [-pi, pi]."""
+        sin_sum = sum(w * math.sin(a) for a, w in zip(angles, weights))
+        cos_sum = sum(w * math.cos(a) for a, w in zip(angles, weights))
+        return math.atan2(sin_sum, cos_sum)
+
+    def weighted_mean_and_var(self, particles, weights):
+        """
+        Calcula la media ponderada (x, y, theta) y la varianza ponderada
+        de la nube de partículas.
+
+        Se usa dos veces por ciclo:
+          - Con pesos UNIFORMES -> representa la "predicción" (solo lo que
+            dice el modelo de movimiento/odometría, sin info de visión).
+          - Con self.weights (los pesos que acaba de calcular
+            similarity_function) -> representa la "medición" (lo que ve
+            el robot ahora mismo).
+        """
+        total_w = sum(weights)
+        if total_w <= 0:
+            total_w = self.kf_epsilon
+
+        mean_x = sum(p[0] * w for p, w in zip(particles, weights)) / total_w
+        mean_y = sum(p[1] * w for p, w in zip(particles, weights)) / total_w
+        mean_theta = self.weighted_circular_mean([p[2] for p in particles], weights)
+
+        var_x = sum(w * (p[0] - mean_x) ** 2 for p, w in zip(particles, weights)) / total_w
+        var_y = sum(w * (p[1] - mean_y) ** 2 for p, w in zip(particles, weights)) / total_w
+        var_theta = sum(w * angle_diff(p[2], mean_theta) ** 2 for p, w in zip(particles, weights)) / total_w
+
+        # Piso de varianza: nunca dejar que una distribución "colapsada"
+        # (var=0) haga que el Kalman ignore por completo a la otra fuente.
+        var_x = max(var_x, self.min_variance_xy)
+        var_y = max(var_y, self.min_variance_xy)
+        var_theta = max(var_theta, self.min_variance_theta)
+
+        return mean_x, mean_y, mean_theta, var_x, var_y, var_theta
+
+    def kalman_fuse_linear(self, pred_mean, pred_var, meas_mean, meas_var):
+        """
+        Fusión Kalman clásica de dos gaussianas independientes (para x o y).
+        K cercano a 1 -> se confía en la medición (visión).
+        K cercano a 0 -> se confía en la predicción (movimiento).
+        """
+        k = pred_var / (pred_var + meas_var + self.kf_epsilon)
+        fused_mean = pred_mean + k * (meas_mean - pred_mean)
+        fused_var  = (1.0 - k) * pred_var
+        return fused_mean, fused_var, k
+
+    def kalman_fuse_angle(self, pred_mean, pred_var, meas_mean, meas_var):
+        """Igual que kalman_fuse_linear pero respetando el wrap-around de theta."""
+        innovation = angle_diff(meas_mean, pred_mean)
+        k = pred_var / (pred_var + meas_var + self.kf_epsilon)
+        fused_mean = angle_diff(pred_mean + k * innovation, 0.0)
+        fused_var  = (1.0 - k) * pred_var
+        return fused_mean, fused_var, k
+
+    def compute_best_pose(self):
+        """
+        Fusión Kalman entre:
+          - "Predicción": estimación de las partículas con pesos UNIFORMES,
+            o sea, solo lo que dice el modelo de movimiento/odometría.
+          - "Medición": estimación de las partículas con self.weights,
+            es decir, lo que "ve" el robot según el modelo de observación.
+
+        El Kalman decide en automático a cuál confiar más, según qué tan
+        dispersa (incierta) esté cada una de las dos nubes ponderadas.
+        Reemplaza el umbral fijo (max_w > uniform_w * 1.5) que había antes.
+        """
+        if not self.particles:
+            return
+        if not self.weights or len(self.weights) != len(self.particles):
+            # Sin pesos válidos de visión todavía -> solo promedio de movimiento
+            self.weights = [1.0 / len(self.particles)] * len(self.particles)
+
+        n = len(self.particles)
+        uniform_weights = [1.0 / n] * n
+
+        # 1) Predicción -> solo movimiento (ignora el peso de visión)
+        pred_x, pred_y, pred_theta, pred_var_x, pred_var_y, pred_var_theta = \
+            self.weighted_mean_and_var(self.particles, uniform_weights)
+
+        # 2) Medición -> lo que "ve" el robot (pesos actualizados por visión)
+        meas_x, meas_y, meas_theta, meas_var_x, meas_var_y, meas_var_theta = \
+            self.weighted_mean_and_var(self.particles, self.weights)
+
+        # 3) Fusión Kalman eje por eje
+        self.best_x, var_x, kx = self.kalman_fuse_linear(pred_x, pred_var_x, meas_x, meas_var_x)
+        self.best_y, var_y, ky = self.kalman_fuse_linear(pred_y, pred_var_y, meas_y, meas_var_y)
+        self.best_theta, var_theta, kth = self.kalman_fuse_angle(pred_theta, pred_var_theta, meas_theta, meas_var_theta)
+
+        self.kf_gain = (kx, ky, kth)
+        self.kf_var  = (var_x, var_y, var_theta)
+
+    def publish_estimated_pose(self):
+        """Publica PoseStamped de la pose estimada en pumas_map."""
+        msg = PoseStamped()
+        msg.header.frame_id = "map"
+        msg.header.stamp    = self.get_clock().now().to_msg()
+        msg.pose.position.x    = self.best_x
+        msg.pose.position.y    = self.best_y
+        msg.pose.orientation.z = float(math.sin(self.best_theta / 2.0))
+        msg.pose.orientation.w = float(math.cos(self.best_theta / 2.0))
+        self.pose_pub.publish(msg)
+
+    def publish_tf_continuous(self):
+        """
+        Calcula y publica TF pumas_map → pumas_odom.
+        pumas_map → pumas_odom → pumas_base_link
+        odometría ya publica odom → base_link con la pose
+        (ox, oy, o_theta). El filtro (best_x, best_y, best_theta)
+        en pumas_map
+        Queremos:
+            T_map_odom  ⊕  T_odom_base  =  T_map_base
+
+            map_x     =  best_x - ox*cos(o_theta) + oy*sin(o_theta)
+            map_y     =  best_y - ox*sin(o_theta) - oy*cos(o_theta)
+            map_theta =  best_theta - o_theta
+
+            [map_x]   = R(-o_theta) * [ox, oy] restado de [best_x, best_y]
+        """
+        # Pose actual que reporta la odometría (odom → base_link)
+        ox, oy, o_theta = self.current_odom_pose
+
+        # Rotación inversa: llevar el vector odom al marco map
+        cos_t = math.cos(self.best_theta - o_theta)
+        sin_t = math.sin(self.best_theta - o_theta)
+
+        # T_map_odom = T_map_base ⊖ T_odom_base
+        map_odom_x     =  self.best_x - (ox * math.cos(self.best_theta - o_theta)
+                                        - oy * math.sin(self.best_theta - o_theta))
+        map_odom_y     =  self.best_y - (ox * math.sin(self.best_theta - o_theta)
+                                        + oy * math.cos(self.best_theta - o_theta))
+        map_odom_theta =  self.best_theta - o_theta
+
+        now = self.get_clock().now().to_msg()
+
+        t = TransformStamped()
+        t.header.stamp    = now
+        t.header.frame_id = "map"
+        t.child_frame_id  = "odom"
+
+        t.transform.translation.x = map_odom_x
+        t.transform.translation.y = map_odom_y
+        t.transform.translation.z = 0.0
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = float(math.sin(map_odom_theta / 2.0))
+        t.transform.rotation.w = float(math.cos(map_odom_theta / 2.0))
+
+        self.tf_broadcaster.sendTransform(t)
+
+    def read_yaml(self,config_file):
+        with open(config_file, 'r') as file:
+            configs = yaml.safe_load(file)
+            self. map_name = configs["name"]
+            self.FIELD_X_MIN = configs["field"]["x_min"]
+            self.FIELD_X_MAX = configs["field"]["x_max"]
+            self.FIELD_Y_MIN = configs["field"]["y_min"]
+            self.FIELD_Y_MAX = configs["field"]["y_max"]
+
+            for _ , landmark in configs["landmarks"].items():
+                self.map_landmarks[landmark["id"]]=[]
+                for point in landmark["points"]:
+                    self.map_landmarks[landmark["id"]].append(tuple(point))
+            #print(self.map_landmarks)
+
+            # OPTIMIZACIÓN: aplanar el dict de landmarks a una sola lista
+            # [(id, x, y), ...] una sola vez aquí, en vez de que
+            # predict_measurements haga .items() + loop anidado en CADA
+            # llamada (una llamada por partícula, 800 veces por callback
+            # de observación). Reduce el overhead de Python en el punto
+            # más caliente del pipeline.
+            self.flat_landmarks = [
+                (lm_id, x, y)
+                for lm_id, points in self.map_landmarks.items()
+                for (x, y) in points
+            ]
+
+    def init_particles(self):
+        self.particles = []
+
+    # Start pose
+        init_x     = self.best_x
+        init_y     = self.best_y
+        init_theta = self.best_theta   # rad orientation
+
+        for _ in range(self.num_particles):
+            x = random.gauss(init_x, self.init_sigma_xy)
+            y = random.gauss(init_y, self.init_sigma_xy)
+            theta = random.gauss(init_theta, self.init_sigma_theta)
+
+            # Clamping
+            x = max(self.FIELD_X_MIN, min(x, self.FIELD_X_MAX))
+            y = max(self.FIELD_Y_MIN, min(y, self.FIELD_Y_MAX))
+
+            self.particles.append([x, y, theta])
+
+        self.weights       = [1.0 / self.num_particles] * self.num_particles
+        self.particle_scores = [1.0 / self.num_particles] * self.num_particles
+
+# -----------MOTION MODEL -------------------------
+# Based on Table 5.6 page 136 PR
+
+    def motion_callback(self, msg):
+        dx_local = msg.x
+        dy_local = msg.y
+        dtheta = msg.theta
+
+        self.is_moving = True
+
+        # Adaptación temporal para el modelo viejo (asumiendo que dy es casi 0)
+        dt = math.hypot(dx_local, dy_local)
+        u_t = (0.0, dt, dtheta) # (dr1, dt, dr2)
+
+        new_particles = []
+        for p in self.particles:
+            new_p = self.sample_motion_model(u_t, p, self.alphas)
+            new_particles.append(new_p)
+        
+        self.particles = new_particles
+
+        self.compute_best_pose()
+        self.publish_estimated_pose()
+        self.publish_particles()
+
+    def sample_motion_model(self, u_t, x_prev, a):
+        dr1, dt, dr2 = u_t
+        # Standard Deviation
+        s1 = math.sqrt(a[0]*dr1**2 + a[1]*dt**2)
+        st = math.sqrt(a[2]*dt**2 + a[3]*dr1**2 + a[3]*dr2**2)
+        s2 = math.sqrt(a[0]*dr2**2 + a[1]*dt**2)
+
+        # Sample with noise
+        h_dr1 = dr1 - random.gauss(0, s1)
+        h_dt  = dt  - random.gauss(0, st)
+        h_dr2 = dr2 - random.gauss(0, s2)
+
+        # New pose
+        x_new = x_prev[0] + h_dt * math.cos(x_prev[2] + h_dr1)
+        y_new = x_prev[1] + h_dt * math.sin(x_prev[2] + h_dr1)
+        theta_new = x_prev[2] + h_dr1 + h_dr2
+        # CLAMPING: No permitir que salgan de los límites
+        # Usamos un pequeño margen (self.field_margin) por si los landmarks están fuera
+        x_new = max(self.FIELD_X_MIN - self.field_margin, min(x_new, self.FIELD_X_MAX + self.field_margin))
+        y_new = max(self.FIELD_Y_MIN - self.field_margin, min(y_new, self.FIELD_Y_MAX + self.field_margin))
+        return [x_new, y_new, angle_diff(theta_new, 0)]
+
+#------------OBSERVATION MODEL---------------------
+    def observation_callback(self, msg):
+        # PROFILING: mide cuánto tarda todo el callback. Si esto se acerca
+        # o supera el periodo del timer de movimiento (0.15s), es evidencia
+        # de que este callback está bloqueando el executor de un solo hilo
+        # y por eso el motion model se retrasa (partículas "atrás" de la
+        # odometría real). Revisa el log "Observation callback duration".
+        t_start = time.time()
+
+        # THROTTLE: si llegó demasiado rápido después del último mensaje
+        # procesado, se descarta aquí mismo (barato, casi sin costo) en vez
+        # de dejar que se acumule trabajo pendiente para el executor.
+        if (t_start - self.last_obs_process_time) < self.min_obs_interval:
+            return
+        self.last_obs_process_time = t_start
+
+        if not self.is_moving:
+            return
+        self.latest_observations = sorted(list(msg.landmarks), key=lambda l: l.angle)
+
+        valid_landmarks = [lm for lm in msg.landmarks if lm.id not in [0, 2]]
+        self.latest_observations = sorted(list(msg.landmarks), key=lambda l: l.angle)
+
+        # Si hay menos landmarks que el mínimo, solo confiar en odometría
+        if len(self.latest_observations) < self.min_landmarks_for_correction:
+            #self.get_logger().info(f"Only {len(self.latest_observations)} landmarks — trusting odometry only.")
+            self.publish_particles()
+            self.publish_estimated_pose()
+            self._log_callback_duration(t_start)
+            return
+
+        if self.latest_observations:
+            #  CALCULAR PESOS (Update Step)
+            new_weights = []
+            for idx, p in enumerate(self.particles):
+                preds = self.predict_measurements(p)
+                instant_weight = self.similarity_function(preds, self.latest_observations)
+
+                # NUEVO: Filtro de memoria (Inercia de peso)
+                # self.weight_smoothing_alpha peso histórico, resto lo que ve la cámara ahorita
+                if idx < len(self.particle_scores):
+                    smoothed_weight = (self.weight_smoothing_alpha * self.particle_scores[idx]
+                                        + (1.0 - self.weight_smoothing_alpha) * instant_weight)
+                else:
+                    smoothed_weight = instant_weight
+
+                new_weights.append(smoothed_weight)
+
+            # Guardamos los suavizados en la memoria para el próximo ciclo
+            self.particle_scores = new_weights.copy()
+
+            # Check average of weights
+            avg_weight = sum(new_weights)/len(new_weights)
+            max_weight = max(new_weights)
+
+            # DETECCIÓN DE DIVERGENCIA SEVERA
+            if max_weight < self.divergence_weight_threshold:  # Pesos muy bajos
+                self.get_logger().warn(
+                    f"Divergence detected - Max weight: {max_weight:.6f}"
+                )
+                # Inyectar % de partículas aleatorias
+                num_random = int(self.random_injection_fraction * self.num_particles)
+                for i in range(num_random):
+                    self.particles[i] = [
+                        random.uniform(-self.field_x/2, self.field_x/2),
+                        random.uniform(-self.field_y/2, self.field_y/2),
+                        random.uniform(-math.pi, math.pi)
+                    ]
+                self.get_logger().info(f"Looking for position...")
+            #  NORMALIZAR PESOS (Total Probability Theorem)
+            sum_w = sum(new_weights) + self.weight_sum_epsilon
+            self.weights = [w / sum_w for w in new_weights]
+            #----LOGS----
+            self.get_logger().info(f"Average weight : {avg_weight:.4f} | Max weight : {max_weight:.4f}")
+
+            # Neff = 1 / sum(w^2). Indica qué tan bien repartida está la probabilidad.
+            sq_weights = sum([w**2 for w in self.weights])
+            neff = 1.0 / sq_weights
+            self.get_logger().info(f"Neff : {neff:.4}")
+            # ----------------------------------
+            if neff < self.num_particles * self.neff_resample_fraction:
+                self.resample(robot_is_moving=self.is_moving)
+                self.get_logger().info("Resampling Executed.")
+
+            # self.weights (recién normalizados, ANTES del resample-reset) ya
+            # representan "lo que ve el robot" -> se usan dentro de
+            # compute_best_pose() para la fusión Kalman contra el promedio
+            # de movimiento puro.
+            self.compute_best_pose()
+            kx, ky, kth = self.kf_gain
+            self.get_logger().info(
+                f"KF gain -> x:{kx:.2f} y:{ky:.2f} theta:{kth:.2f} "
+                f"(cercano a 1 = confía en visión, cercano a 0 = confía en movimiento)"
+            )
+            self.publish_particles()
+            self.publish_estimated_pose()
+            self._log_callback_duration(t_start)
+        else:
+            self._log_callback_duration(t_start)
+            return
+
+    def _log_callback_duration(self, t_start):
+        """Loggea la duración total de observation_callback. Si esto supera
+        ~0.1-0.15s de forma consistente, el callback está compitiendo por
+        CPU con el timer de movimiento (0.15s) en el executor de un solo
+        hilo, y eso explica un atraso de las partículas vs la odometría
+        real -- en ese caso conviene optimizar predict_measurements /
+        similarity_function o pasar a un MultiThreadedExecutor con locks."""
+        duration = time.time() - t_start
+        if duration > self.callback_duration_warn_threshold:
+            self.get_logger().warn(f"Observation callback duration: {duration*1000:.1f} ms (alto)")
+        else:
+            self.get_logger().info(f"Observation callback duration: {duration*1000:.1f} ms")
+
+    def publish_particles(self):
+        msg = PoseArray()
+        msg.header.frame_id = "pumas_map"
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        # Iterar sobre el enjambre real de partículas
+        for p in self.particles:
+            pose = Pose()
+            pose.position.x = p[0]
+            pose.position.y = p[1]
+            pose.position.z = 0.0
+
+            # yaw (p[2]) a cuaternión para ROS 2
+            pose.orientation = yaw_to_quaternion(p[2])
+            msg.poses.append(pose)
+
+        self.particles_pub.publish(msg)
+
+    def resample(self, robot_is_moving):
+        M = len(self.particles)
+
+        # 1. ELITISMO: Encontrar los índices de las mejores partículas antes de destruir los pesos
+        best_indices = sorted(range(M), key=lambda k: self.weights[k], reverse=True)
+        num_elites = int(M * self.elite_fraction)  # Conservar una fracción de las mejores partículas
+        elites = [self.particles[idx] for idx in best_indices[:num_elites]]
+
+        # 2. ALGORITMO LOW VARIANCE SAMPLER (Para llenar el resto de la población)
+        new_particles = []
+        r = random.uniform(0, 1.0 / M)
+        c = self.weights[0]
+        i = 0
+
+        for m in range(1, (M - num_elites) + 1):
+            U = r + (m - 1) * (1.0 / M)
+            while U > c:
+                i = (i + 1) % M
+                c += self.weights[i]
+
+            p = self.particles[i]
+
+            if not robot_is_moving:
+                jitter_xy = self.jitter_xy_still
+                jitter_theta = self.jitter_theta_still
+            else:
+                jitter_xy = self.jitter_xy_moving
+                jitter_theta = self.jitter_theta_moving
+
+            nx = p[0] + random.gauss(0, jitter_xy)
+            ny = p[1] + random.gauss(0, jitter_xy)
+            nt = angle_diff(p[2], random.gauss(0, jitter_theta))
+
+            # CLAMPING
+            nx = max(self.FIELD_X_MIN, min(nx, self.FIELD_X_MAX))
+            ny = max(self.FIELD_Y_MIN, min(ny, self.FIELD_Y_MAX))
+
+            new_particles.append([nx, ny, nt])
+
+        # 3. INYECTAR LAS ELITES
+        self.particles = elites + new_particles
+
+        # Reiniciamos la memoria de pesos para la nueva generación
+        self.weights = [1.0 / M] * M
+        self.particle_scores = [1.0 / M] * M
+
+    def predict_measurements(self, particle):
+        px, py, p_theta = particle
+        predicted_dets = []
+        half_fov = self.fov_rad / 2.0
+        # Usa la lista aplanada (precomputada en read_yaml) en vez de
+        # iterar el dict + sublistas cada vez -> menos overhead de Python
+        # por partícula, que es lo que se multiplica x800 cada callback.
+        for lm_id, lm_x, lm_y in self.flat_landmarks:
+            dx = lm_x - px
+            dy = lm_y - py
+            abs_angle = math.atan2(dy, dx)
+            p_angle = angle_diff(abs_angle, p_theta)
+            if abs(p_angle) <= half_fov:
+                predicted_dets.append({"id": lm_id, "angle": p_angle})
+        predicted_dets.sort(key=lambda d: d["angle"])
+        return predicted_dets
+
+    def similarity_function(self, predicted_dets, observations):
+        if not observations or not predicted_dets:
+            return self.no_prediction_weight
+        matched_errors = []
+        matched_pred_indices = set()
+        obs_idx = 0
+        pred_idx = 0
+
+        while obs_idx < len(observations) and pred_idx < len(predicted_dets):
+            obs = observations[obs_idx] #instancia de VisionLandmark
+            pred = predicted_dets[pred_idx]
+            if obs.id == pred['id']:
+                #ID match
+                error = angle_diff(obs.angle, pred['angle'])
+                matched_errors.append(error)
+                matched_pred_indices.add(pred_idx)
+                obs_idx += 1
+                pred_idx += 1
+            else :
+                #only predd pointer (avoid negative false detections)
+                pred_idx += 1
+        # bad particle
+        if not matched_errors:
+            return self.no_match_weight
+
+        num_matches = len(matched_errors)
+        num_observations = len(observations)
+        num_predictions = len(predicted_dets)
+        #------ Gaussian Similarity--------
+        similarity = 0.0
+        var = self.sigma_angle ** 2
+        for err in matched_errors:
+            lklihood = -(err**2)/(2*var)
+            similarity += lklihood
+
+        avg_likelihood = similarity / num_matches
+        quality_score = math.exp(avg_likelihood)
+
+        match_success = num_matches / num_observations
+
+        base_weight = quality_score * match_success
+
+        obs_not_matched = num_observations - num_matches
+
+        if obs_not_matched > self.miss_penalty_free_count:
+            miss_penalty = self.miss_penalty_base ** (obs_not_matched - self.miss_penalty_free_count)
+            base_weight *= miss_penalty
+        pred_not_observed = num_predictions - num_matches
+        if pred_not_observed > num_observations:
+            excess = pred_not_observed - num_observations
+            if excess > self.false_positive_free_count:
+                false_positive_penalty = self.false_positive_penalty_base ** (excess - self.false_positive_free_count)
+                base_weight *= false_positive_penalty
+
+        return max(min(base_weight, self.weight_clip_max), self.weight_clip_min)
+
+def main():
+    rclpy.init()
+    node = ParticleFilterNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
