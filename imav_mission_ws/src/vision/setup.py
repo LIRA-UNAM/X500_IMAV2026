@@ -27,6 +27,8 @@ setup(
             'detector = vision.detector:main',
             'aruco_detector = vision.aruco_detector:main',
             'yaml_coord = vision.yaml_coord:main',
+            'camera_calibration = vision.camera_calibration:main',
+
         ],
     },
 )
