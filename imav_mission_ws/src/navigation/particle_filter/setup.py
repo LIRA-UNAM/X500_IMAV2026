@@ -23,7 +23,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'mcl_node = particle_filter.mcl_node:main', 
+            'mcl_node = particle_filter.mcl_node:main',
+            'delta_2d = particle_filter.delta_2d:main',
+            'map_node = particle_filter.map:main', 
         ],
     },
 )
