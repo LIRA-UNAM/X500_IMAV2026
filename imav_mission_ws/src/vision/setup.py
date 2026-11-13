@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'detector = vision.detector:main',
             'aruco_detector = vision.aruco_detector:main',
+            'yaml_coord = vision.yaml_coord:main',
         ],
     },
 )
