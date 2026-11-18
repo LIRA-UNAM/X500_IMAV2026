@@ -67,8 +67,13 @@ class ArucoDetector(Node):
         self.get_logger().info(f'Tamaño de marcador: {self.marker_size} m')
 
     def camera_info_cb(self, msg: CameraInfo):
-        self.K = np.array(msg.k, dtype=np.float32).reshape(3, 3)
-        self.D = np.array(msg.d, dtype=np.float32)
+        self.K = np.array([
+            [611.242940, 0.000000, 639.808340],
+            [0.000000, 611.671244, 365.158130],
+            [0.000000, 0.000000, 1.000000],
+        ], dtype=np.float64)
+
+        self.D = np.array([-0.019997, -0.000005, 0.000000, -0.000461, 0.010922], dtype=np.float64)
 
     def image_cb(self, msg: Image):
         # Convertir a OpenCV (BGR8)
